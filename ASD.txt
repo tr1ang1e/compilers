@@ -1,0 +1,21 @@
+
+ASD = abstract syntax tree
+clang-c description = https://clang.llvm.org/doxygen/group__CINDEX.html
+
+
+                                       +----------------+
+						               |      ROOT      |   <<  translation unit
+								       +----------------+
+
+									/         ....         \
+
+               +----------------+                             +----------------+
+			   |      NODE      |                             |      NODE      |  <<  operators and type definitions
+			   +----------------+                             +----------------+
+
+			/		  ....         \                        /        ....         \
+
+   +----------------+     +----------------+       +----------------+    +----------------+ 
+   |      LEAF      |     |      LEAF      |       |      LEAF      |    |      LEAF      |  <<  operands
+   +----------------+     +----------------+       +----------------+    +----------------+
+
