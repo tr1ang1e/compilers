@@ -1,7 +1,7 @@
 CMAKE_MINIMUM_REQUIRED(VERSION 3.15)
 
 PROJECT(PARSE)
-SET(TARGET_NAME "traversal")
+SET(TARGET_NAME "main")
 
 # cpecify clang-c paths
 SET(CLANG_C_HEADERS "C:/Program Files/LLVM/include/")
@@ -15,7 +15,7 @@ ELSEIF()
 ENDIF()
 
 # executable
-ADD_EXECUTABLE(${TARGET_NAME} traversal.c foo.h)
+ADD_EXECUTABLE(${TARGET_NAME} main.c parse_unit.c parse_unit.h)
 
 # add paths to target
 TARGET_INCLUDE_DIRECTORIES(${TARGET_NAME} PRIVATE ${CLANG_C_HEADERS})		# analogue for -I option
