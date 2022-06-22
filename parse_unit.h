@@ -1,7 +1,7 @@
 #ifndef PARSE_UNIT
 #define PARSE_UNIT
 
-/* Description of clang-c API entities
+/* Description of the most significant clang-c API entities
  *
  *  :: clang_<name> is clang functions
  *  :: CX<name> is clang types
@@ -38,6 +38,20 @@
  *                          STRUCTS                             *
  *--------------------------------------------------------------*/
 
+typedef struct ClientDataS
+{
+	CXTranslationUnit unit;
+} ClientData;
+
+typedef void (*cursorCallback)(CXCursor, CXClientData);
+
+typedef struct CursorKindS
+{
+	enum CXCursorKind code;
+	const char* string;			// clang-c doesn't provide API to get cursor kind string representation
+	cursorCallback handler;
+} CursorKind;
+
 typedef struct CursorLocationS
 {
 	const char* file;
@@ -45,18 +59,21 @@ typedef struct CursorLocationS
 	unsigned column;
 } CursorLocation;
 
-typedef struct CursorKindS
+typedef struct CursorTokensS
 {
-	enum CXCursorKind code;
-	const char* string;
-} CursorKind;
+	CXToken* tokensArray;		// must be disposed after usage: clang_disposeTokens(...)
+	unsigned tokensNumber;
+} CursorTokens;
 
+// main cursor data
 typedef struct CursorDataS
 {
+	CXTranslationUnit unit;
 	CursorKind kind;
 	const char* type;
 	const char* name;
 	CursorLocation location;
+	CursorTokens tokens;
 } CursorData;
 
 
@@ -64,8 +81,8 @@ typedef struct CursorDataS
  *                         FUNCTIONS                            *
  *--------------------------------------------------------------*/
 
-void generate_cursor_data(CXCursor cursor);
-enum CXChildVisitResult visitor_callback(CXCursor currentChild, CXCursor parent, CXClientData clientData);
+CursorData generate_cursor_data(CXCursor cursor, CXTranslationUnit unit);
+enum CXChildVisitResult visitor_callback(CXCursor currentCursor, CXCursor parent, CXClientData clientData);
 
 
 #endif // PARSE_UNIT 

@@ -1,8 +1,18 @@
 #include "parse_unit.h"
 
+/* NOTES
+ * 
+ * Libclang errors might appear in execution process, e.g.: 
+ * "variable has incomplete type" and like this. It's OK and
+ * made in purpose of parcing only given files without
+ * managing both system and users header files.
+ *
+ * */
 
-// TBD: fix problem with duplicating when typedef
-// TBD: parse macros
+// TBD: fix problem with duplicating when typedef (see may be canonical)
+// TBD: parse macros = clang_Cursor_isMacroFunctionLike() 
+// TBD: enum constants value = clang_getEnumConstantDeclValue()
+// TBD: add callback logic
 
 /*--------------------------------------------------------------*
  *                          DEFINES                             *
@@ -25,10 +35,14 @@
 
 int main(int argc, char** argv)
 {
-    // settings
+    // main settings
     const char* unitName = "examples/unit.c";     // TBD: add list of units to be parsed
     const char** argsList = NULL;                 // if any args, transform to:  const char* argsList[] = {..., ...};
     int argsNumber = 0;                           // if any args, transform to:  int argsNumber = sizeof(argsList);
+
+    // additional parser settings
+    enum CXTranslationUnit_Flags options = CXTranslationUnit_DetailedPreprocessingRecord | 
+        CXTranslationUnit_SkipFunctionBodies | CXTranslationUnit_SingleFileParse;
 
     // provide shared context for creating translation units 
     // excludeDeclarationFromPCH = 0, displayDiagnostics = 1
@@ -36,13 +50,13 @@ int main(int argc, char** argv)
 
     // parse specified unit (if error returns NULL without specifying error)  // TBD: parse list of units in a loop
     CXTranslationUnit unit = clang_parseTranslationUnit(
-        index,          // CXIndex                  context
-        unitName,       // const char*              name of unit to parse (might be pass through the 'argv' in the same form as here)     
-        argsList,       // const char**             array of arguments to pass to parser
-        argsNumber,     // int                      number of arguments to pass to parser
-        0,              // struct CXUnsavedFile     unsaved files to parse
-        0,              // unsigned int             number of unsaved files to parse
-        CXTranslationUnit_SkipFunctionBodies        // enum CXTranslationUnit_Flags
+        index,          // CXIndex                          context
+        unitName,       // const char*                      name of unit to parse (might be pass through the 'argv' in the same form as here)     
+        argsList,       // const char**                     array of arguments to pass to parser
+        argsNumber,     // int                              number of arguments to pass to parser
+        0,              // struct CXUnsavedFile             unsaved files to parse
+        0,              // unsigned int                     number of unsaved files to parse
+        options         // enum CXTranslationUnit_Flags     additional parser settings
     );
 
     if (!unit)
@@ -53,8 +67,13 @@ int main(int argc, char** argv)
     {
         _TRACE_("CXTranslationUnit, success");
 
+        // prepare client data
+        ClientData cData = { unit };
+        CXClientData clangData = (CXClientData)&cData;
+
+        // initiate traversal
         CXCursor root = clang_getTranslationUnitCursor(unit);
-        clang_visitChildren(root, visitor_callback, NULL);
+        clang_visitChildren(root, visitor_callback, clangData);
     }
 
     // free resources

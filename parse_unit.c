@@ -1,67 +1,135 @@
 #include "parse_unit.h"
 
 /*--------------------------------------------------------------*
- *                          STATIC                              *
+ *               STATIC FUNCTIONS PROTOTYPES                    *
  *--------------------------------------------------------------*/
 
-static CursorData cursorData = { 0 };
+// callback functions
+static void cursor_handler_struct(CXCursor cursor, CXClientData clangData);
+static void cursor_handler_enum(CXCursor cursor, CXClientData clangData);
+static void cursor_handler_field(CXCursor cursor, CXClientData clangData);
+static void cursor_handler_enum_constant(CXCursor cursor, CXClientData clangData);
+static void cursor_handler_function(CXCursor cursor, CXClientData clangData);
+static void cursor_handler_typedef(CXCursor cursor, CXClientData clangData);
+static void cursor_handler_macro(CXCursor cursor, CXClientData clangData);
 
-static CursorKind cursorKinds[] =
-{
-    {CXCursor_StructDecl        , "_struct"},
-    {CXCursor_EnumDecl          , "_enum"},
-    {CXCursor_FieldDecl         , "_field"},
-    {CXCursor_EnumConstantDecl  , "_enum_constant"},
-    {CXCursor_FunctionDecl      , "_function"},
-    {CXCursor_TypedefDecl       , "_typedef"}
-};
+// filter cursors
+static bool is_from_given_file(CXCursor cursor);         // true if is from given file, false otherwise
+static int find_cursor_kind(CXCursor cursor);            // cursorKinds[] index if success, -1 otherwise
 
-static int find_cursor_kind(CXCursor cursor);
+// get cursor common information
 static CursorKind get_cursor_kind(CXCursor cursor);
 static const char* get_cursor_type(CXCursor cursor);
 static const char* get_cursor_name(CXCursor cursor);
 static CursorLocation get_cursor_location(CXCursor cursor);
-static void print_cursor_data();
-static bool is_appropriate_kind(CXCursor cursor);
-static bool is_from_main_file(CXCursor cursor);
+static CursorTokens get_cursor_tokens(CXCursor cursor, CXTranslationUnit unit);
 
+// utilities
+static const char* get_token_string(CXToken token, CXTranslationUnit unit);
+static void print_cursor_data(CursorData cursorData);
+
+
+/*--------------------------------------------------------------*
+ *                          STATIC                              *
+ *--------------------------------------------------------------*/
+
+static CursorKind cursorKinds[] =
+{
+    { CXCursor_StructDecl        , "decl_struct"         ,  cursor_handler_struct        },
+    { CXCursor_EnumDecl          , "decl_enum"           ,  cursor_handler_enum          },
+    { CXCursor_FieldDecl         , "decl_field"          ,  cursor_handler_field         },
+    { CXCursor_EnumConstantDecl  , "decl_enum_constant"  ,  cursor_handler_enum_constant },
+    { CXCursor_FunctionDecl      , "decl_function"       ,  cursor_handler_function      },
+    { CXCursor_TypedefDecl       , "decl_typedef"        ,  cursor_handler_typedef       },
+    { CXCursor_MacroDefinition   , "decl_macro"          ,  cursor_handler_macro         },
+};
+
+
+/*--------------------------------------------------------------*
+ *                          DEBUG                               *
+ *--------------------------------------------------------------*/
+
+bool print_cursor_kind(CXCursor cursor)
+{
+    enum CXCursorKind cursorKindEnum = clang_getCursorKind(cursor);
+    
+    if (cursorKindEnum == CXCursor_MacroDefinition)
+    {
+        if (!clang_Cursor_isMacroFunctionLike(cursor))
+        {
+            CXString cursorKind = clang_getCursorKindSpelling(cursorKindEnum);
+            const char* cursorKindString = clang_getCString(cursorKind);
+            clang_disposeString(cursorKind);
+            printf(" : %s", cursorKindString);
+
+            return true;
+        }
+    }
+
+    return false;
+}
+
+bool print_cursor_location(CXCursor cursor)
+{
+    CursorLocation location = get_cursor_location(cursor);
+    printf(" : %s:%u:%u", location.file, location.line, location.column);
+    
+    return true;
+}
+
+bool print_cursor_name(CXCursor cursor)
+{
+    printf(" : %s", get_cursor_name(cursor));
+
+    return true;
+}
+
+#define _TR_(x) printf(" :: %d \n", x)
 
 /*--------------------------------------------------------------*
  *                          PUBLIC                              *
  *--------------------------------------------------------------*/
 
-void generate_cursor_data(CXCursor cursor)
+CursorData generate_cursor_data(CXCursor cursor, CXTranslationUnit unit)
 {
-    // kind
-    cursorData.kind = get_cursor_kind(cursor);
-    
-    // type
-    cursorData.type = get_cursor_type(cursor);
+    CursorData cursorData =
+    {
+        .unit = unit,
+        .kind = get_cursor_kind(cursor),
+        .type = get_cursor_type(cursor),
+        .name = get_cursor_name(cursor),
+        .location = get_cursor_location(cursor),
+        .tokens = get_cursor_tokens(cursor, unit),
+    };
 
-    // name
-    cursorData.name = get_cursor_name(cursor);
-
-    // location
-    cursorData.location = get_cursor_location(cursor);
-
+    return cursorData;
 }
 
-enum CXChildVisitResult visitor_callback(CXCursor currentChild, CXCursor parent, CXClientData clientData)
+enum CXChildVisitResult visitor_callback(CXCursor currentCursor, CXCursor parent, CXClientData clangData)
 {
-    do
-    {
-        // cursor entities of the main unit
-        if (!is_from_main_file(currentChild)) { break; }
+    CursorData cursorData = { 0 };
 
-        // cursor entities of an appropriate kind  
-        if (!is_appropriate_kind(currentChild)) { break; }
+    if (is_from_given_file(currentCursor))    // cursor entities of only the given unit
+    {    
+        int index = find_cursor_kind(currentCursor);
 
-        generate_cursor_data(currentChild);
-        print_cursor_data();
+        if (index != -1)
+        {            
+            // common data
+            cursorData = generate_cursor_data(currentCursor, ((ClientData*)clangData)->unit);
+            
+            // cursor kind handler
+            CursorKind cursorKind = cursorKinds[index];
+            cursorKind.handler(currentCursor, clangData);
 
-    } while (0);
+            // debug
+            print_cursor_data(cursorData);
+        }
+    }
 
-    
+    // clean up
+    // ...
+
     return CXChildVisit_Recurse;
 }
 
@@ -69,6 +137,47 @@ enum CXChildVisitResult visitor_callback(CXCursor currentChild, CXCursor parent,
 /*--------------------------------------------------------------*
  *                          STATIC                              *
  *--------------------------------------------------------------*/
+
+void cursor_handler_struct(CXCursor cursor, CXClientData clangData)
+{
+    
+}
+
+void cursor_handler_enum(CXCursor cursor, CXClientData clangData)
+{
+
+}
+
+void cursor_handler_field(CXCursor cursor, CXClientData clangData)
+{
+
+}
+
+void cursor_handler_enum_constant(CXCursor cursor, CXClientData clangData)
+{
+
+}
+
+void cursor_handler_function(CXCursor cursor, CXClientData clangData)
+{
+
+}
+
+void cursor_handler_typedef(CXCursor cursor, CXClientData clangData)
+{
+
+}
+
+void cursor_handler_macro(CXCursor cursor, CXClientData clangData)
+{
+
+}
+
+bool is_from_given_file(CXCursor cursor)
+{
+    CXSourceLocation cursorLocation = clang_getCursorLocation(cursor);
+    return clang_Location_isFromMainFile(cursorLocation);
+}
 
 int find_cursor_kind(CXCursor cursor)
 {
@@ -141,32 +250,41 @@ CursorLocation get_cursor_location(CXCursor cursor)
     return cursorLocation;
 }
 
-void print_cursor_data()
+CursorTokens get_cursor_tokens(CXCursor cursor, CXTranslationUnit unit)
+{
+    CursorTokens tokens = { 0 };
+    
+    // get cursor range and tokenize it
+    CXSourceRange range = clang_getCursorExtent(cursor);
+    clang_tokenize(unit, range, &tokens.tokensArray, &tokens.tokensNumber);
+
+    return tokens;
+}
+
+const char* get_token_string(CXToken token, CXTranslationUnit unit)
+{
+    const char* tokenString = NULL;
+    
+    CXString tokenSpelling = clang_getTokenSpelling(unit, token);
+    tokenString = clang_getCString(tokenSpelling);
+    clang_disposeString(tokenSpelling);
+
+    return tokenString;
+}
+
+void print_cursor_data(CursorData cursorData)
 {
     // kind, name, location 
-    const char* format = "  %-18s %-24s %-30s %s:%u:%u \n";
-
-    printf(format,
+    printf("  %-20s %-24s %-30s %s:%u:%-10u     ",
         cursorData.kind.string,
         cursorData.type, cursorData.name,
         cursorData.location.file, cursorData.location.line, cursorData.location.column
     );
-}
 
-bool is_appropriate_kind(CXCursor cursor)
-{
-    bool result = false;
-
-    if (find_cursor_kind(cursor) != -1)
+    // tokens
+    for (unsigned token = 0; token < cursorData.tokens.tokensNumber; ++token)
     {
-        result = true;
+        printf("%s . ", get_token_string(cursorData.tokens.tokensArray[token], cursorData.unit));
     }
-
-    return result;
-}
-
-bool is_from_main_file(CXCursor cursor)
-{
-    CXSourceLocation cursorLocation = clang_getCursorLocation(cursor);
-    return clang_Location_isFromMainFile(cursorLocation);
+    printf("\n");
 }
