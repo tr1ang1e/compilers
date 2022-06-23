@@ -28,10 +28,20 @@
  *                          DEFINES                             *
  *--------------------------------------------------------------*/
 
+#define ARRAY_SIZE(array)  (sizeof(array) / sizeof(array[0]))
+#define _TR_(x) printf(" :: %d \n", x) // debug
+
 
 /*--------------------------------------------------------------*
  *                           ENUMS                              *
  *--------------------------------------------------------------*/
+
+typedef enum CursorCategoryE
+{
+	CURSOR_UNKNOWN_E = -1,
+	CURSOR_PARENT_E,
+	CURSOR_CHILD_E,
+} CursorCategoryEnum;
 
 
 /*--------------------------------------------------------------*
@@ -42,6 +52,12 @@ typedef struct ClientDataS
 {
 	CXTranslationUnit unit;
 } ClientData;
+
+typedef struct CursorCategoryS
+{
+	CursorCategoryEnum category;
+	int index;					// index in corresponding array
+} CursorCategory;
 
 typedef void (*cursorCallback)(CXCursor, CXClientData);
 
@@ -68,12 +84,12 @@ typedef struct CursorTokensS
 // main cursor data
 typedef struct CursorDataS
 {
-	CXTranslationUnit unit;
-	CursorKind kind;
-	const char* type;
-	const char* name;
-	CursorLocation location;
-	CursorTokens tokens;
+	CXTranslationUnit unit;		// parsed unit
+	CursorKind kind;			// exact kind
+	const char* type;			// type spelling as it is in the source code
+	const char* name;			// name of entity cursor points to
+	CursorLocation location;	// location of entity cursor point to
+	CursorTokens tokens;		// all of tokens
 } CursorData;
 
 
@@ -82,7 +98,9 @@ typedef struct CursorDataS
  *--------------------------------------------------------------*/
 
 CursorData generate_cursor_data(CXCursor cursor, CXTranslationUnit unit);
-enum CXChildVisitResult visitor_callback(CXCursor currentCursor, CXCursor parent, CXClientData clientData);
+enum CXChildVisitResult visitor_callback(CXCursor currentCursor, CXCursor parent, CXClientData clangData);
+enum CXChildVisitResult visitor_parent_callback(CXCursor currentCursor, CXCursor parent, CXClientData clangData);
+enum CXChildVisitResult visitor_child_callback(CXCursor currentCursor, CXCursor parent, CXClientData clangData);
 
 
 #endif // PARSE_UNIT 

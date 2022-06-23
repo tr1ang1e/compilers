@@ -9,10 +9,13 @@
  *
  * */
 
-// TBD: fix problem with duplicating when typedef (see may be canonical)
+// TBD: fix problem with duplicating when typedef (see may be canonical)  // check previous structure (if the same then skip)
 // TBD: parse macros = clang_Cursor_isMacroFunctionLike() 
 // TBD: enum constants value = clang_getEnumConstantDeclValue()
 // TBD: add callback logic
+// TBD: parse underlying typedef type = clang_getTypedefDeclUnderlyingType()
+// TBD: (?) combine visitor callbacks into one function
+// TBD: rename parent to parent, child to child
 
 /*--------------------------------------------------------------*
  *                          DEFINES                             *
@@ -36,13 +39,12 @@
 int main(int argc, char** argv)
 {
     // main settings
-    const char* unitName = "examples/unit.c";     // TBD: add list of units to be parsed
-    const char** argsList = NULL;                 // if any args, transform to:  const char* argsList[] = {..., ...};
-    int argsNumber = 0;                           // if any args, transform to:  int argsNumber = sizeof(argsList);
+    const char* unitName = "examples/unit.c";               // TBD: add list of units to be parsed
+    const char* argsList[] = { "-I./examples/include" };    // -I<headers_path> 
+    int argsNumber = ARRAY_SIZE(argsList);                  
 
-    // additional parser settings
-    enum CXTranslationUnit_Flags options = CXTranslationUnit_DetailedPreprocessingRecord | 
-        CXTranslationUnit_SkipFunctionBodies | CXTranslationUnit_SingleFileParse;
+    // additional parser settings (add CXTranslationUnit_SingleFileParse to avoid includes parsing)
+    enum CXTranslationUnit_Flags options = CXTranslationUnit_DetailedPreprocessingRecord | CXTranslationUnit_SkipFunctionBodies; 
 
     // provide shared context for creating translation units 
     // excludeDeclarationFromPCH = 0, displayDiagnostics = 1
@@ -73,7 +75,8 @@ int main(int argc, char** argv)
 
         // initiate traversal
         CXCursor root = clang_getTranslationUnitCursor(unit);
-        clang_visitChildren(root, visitor_callback, clangData);
+        // clang_visitChildren(root, visitor_parent_callback, clangData);
+         clang_visitChildren(root, visitor_callback, clangData);
     }
 
     // free resources

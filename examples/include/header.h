@@ -1,6 +1,6 @@
 #ifndef _HEADER
 #define _HEADER
 
-int foo(int arg);
+typedef char** UnknownType;
 
 #endif // _HEADER

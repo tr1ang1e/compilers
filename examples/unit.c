@@ -25,13 +25,6 @@ typedef SSIZE_T ssize_t;
 #define EXPORT
 #endif
 
-typedef struct RegInfoS
-{
-	uint32_t address;
-	uint32_t mask;
-	uint32_t value;
-}RegInfo;
-
 #endif
 
 enum NameE
@@ -41,20 +34,21 @@ enum NameE
 	TWO = 4,
 };
 
+#define MACRO 42
+#define FMACRO(x) (x+1)
+
 typedef struct NameS
 {
 	const char* key;
-	int value;
 	struct NameS* next;
-
+	int arr[MACRO];
+	UnknownType filed;
 	size_t xy;
 	uint16_t ij;
 } Name;
 
-#define MACRO 42
-#define FMACRO(x) (x+1)
 
-void function(struct Unknown arg) 
+void function(UnknownType* arg) 
 {
 	return;
 }
