@@ -23,6 +23,8 @@
 #include <stdbool.h>
 #include <string.h>
 
+#include "list.h"
+
 
 /*--------------------------------------------------------------*
  *                          DEFINES                             *
@@ -42,6 +44,68 @@ typedef enum CursorCategoryE
 	CURSOR_PARENT_E,
 	CURSOR_CHILD_E,
 } CursorCategoryEnum;
+
+
+/*--------------------------------------------------------------*
+ *                        CONTAINERS                            *
+ *--------------------------------------------------------------*/
+
+typedef struct FiledTypeS
+{
+	const char* name;
+	const char* type;
+	
+	ListNode next;
+} FieldType;
+
+typedef struct StructTypeS
+{
+	const char* name;
+	FieldType* zeroField;
+
+	ListNode next;
+} StructType;
+
+typedef struct EnumConstantTypeS
+{
+	const char* name;
+	int value;
+	
+	ListNode next;
+}EnumConstantType;
+
+typedef struct EnumTypeS
+{
+	const char* name;
+	EnumConstantType* zeroConst;
+
+	ListNode next;
+} EnumType;
+
+typedef struct TypedefTypeS
+{
+	const char* typedefType;
+	const char* underlyingType;
+
+	ListNode next;
+} TypedefType;
+
+typedef struct MacroTypeS
+{
+	const char* name;
+	int value;
+
+	ListNode next;
+} MacroType;
+
+typedef struct FunctionTypeS
+{
+	const char* name;
+	const char* returnType;
+	const char** argsTypes;
+
+	ListNode next;
+} FunctionType;
 
 
 /*--------------------------------------------------------------*

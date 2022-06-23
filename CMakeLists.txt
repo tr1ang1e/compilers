@@ -15,7 +15,7 @@ ELSEIF()
 ENDIF()
 
 # executable
-ADD_EXECUTABLE(${TARGET_NAME} main.c parse_unit.c parse_unit.h)
+ADD_EXECUTABLE(${TARGET_NAME} main.c parse_unit.c parse_unit.h list.c list.h)
 
 # add paths to target
 TARGET_INCLUDE_DIRECTORIES(${TARGET_NAME} PRIVATE ${CLANG_C_HEADERS})		# analogue for -I option

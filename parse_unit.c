@@ -14,7 +14,6 @@ static void cursor_handler_parameter(CXCursor cursor, CXClientData clangData);
 static void cursor_handler_typedef(CXCursor cursor, CXClientData clangData);
 static void cursor_handler_macro(CXCursor cursor, CXClientData clangData);
 
-
 // get cursor common information
 static CursorKind get_cursor_kind(CXCursor cursor);
 static const char* get_cursor_type(CXCursor cursor);
@@ -28,6 +27,16 @@ static int find_cursor_kind(CXCursor cursor, CursorKind* cursorKindsArray, size_
 static CursorCategory get_cursor_category(CXCursor cursor);
 static const char* get_token_string(CXToken token, CXTranslationUnit unit);
 static void print_cursor_data(CursorData cursorData);
+
+/*--------------------------------------------------------------*
+ *                        CONTAINERS                            *
+ *--------------------------------------------------------------*/
+
+ListNode* structures     = NULL;
+ListNode* enums          = NULL;
+ListNode* typedefs       = NULL;
+ListNode* macros         = NULL;
+ListNode* functions      = NULL;
 
 
 /*--------------------------------------------------------------*
