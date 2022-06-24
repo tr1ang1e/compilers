@@ -1,8 +1,8 @@
 #ifndef NEXT_NODE
 #define NEXT_NODE
 
-#define GET_NODE(nextPointer, StructType, nextField) \
-    (StructType*)((char*)(nextPointer) - (char*)&((StructType*)0)->nextField)
+#define GET_NODE(listPointer, ContainerType, listField) \
+    (ContainerType*)((char*)(listPointer) - (char*)&(((ContainerType*)0)->listField))
 
 typedef struct ListNodeS
 {

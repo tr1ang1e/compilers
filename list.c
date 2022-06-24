@@ -1,6 +1,7 @@
 #include <stddef.h>
 #include "list.h"
 
+// returns NULL if list is empty, last ListNode* otherwise
 ListNode* get_last_node(ListNode* current)
 {
     ListNode* last = NULL;

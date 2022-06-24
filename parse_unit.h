@@ -22,6 +22,7 @@
 #include <stdio.h>
 #include <stdbool.h>
 #include <string.h>
+#include <stdlib.h>
 
 #include "list.h"
 
@@ -52,15 +53,15 @@ typedef enum CursorCategoryE
 
 typedef struct FiledTypeS
 {
-	const char* name;
-	const char* type;
+	const char* name;		
+	const char* type;		
 	
 	ListNode next;
 } FieldType;
 
 typedef struct StructTypeS
 {
-	const char* name;
+	const char* name;						// CXString = free
 	FieldType* zeroField;
 
 	ListNode next;
@@ -68,7 +69,7 @@ typedef struct StructTypeS
 
 typedef struct EnumConstantTypeS
 {
-	const char* name;
+	const char* name;		
 	int value;
 	
 	ListNode next;
@@ -76,36 +77,36 @@ typedef struct EnumConstantTypeS
 
 typedef struct EnumTypeS
 {
-	const char* name;
+	const char* name;						// CXString = free
 	EnumConstantType* zeroConst;
 
 	ListNode next;
 } EnumType;
 
+typedef struct FunctionTypeS
+{
+	char* name;								// malloc = free, CXString = free
+	char* returnType;						// malloc = free
+	const char** argsTypes;
+
+	ListNode next;
+} FunctionType;
+
 typedef struct TypedefTypeS
 {
-	const char* typedefType;
-	const char* underlyingType;
+	const char* alias;						// CXString = free
+	const char* underlyingType;				// CXString = free
 
 	ListNode next;
 } TypedefType;
 
 typedef struct MacroTypeS
 {
-	const char* name;
-	int value;
+	const char* name;						// CXString = free
+	const char* value;						// CXString = free
 
 	ListNode next;
 } MacroType;
-
-typedef struct FunctionTypeS
-{
-	const char* name;
-	const char* returnType;
-	const char** argsTypes;
-
-	ListNode next;
-} FunctionType;
 
 
 /*--------------------------------------------------------------*
@@ -141,7 +142,7 @@ typedef struct CursorLocationS
 
 typedef struct CursorTokensS
 {
-	CXToken* tokensArray;		// must be disposed after usage: clang_disposeTokens(...)
+	CXToken* tokensArray;		// must be disposed after usage, call clang_disposeTokens(...)
 	unsigned tokensNumber;
 } CursorTokens;
 
@@ -163,8 +164,8 @@ typedef struct CursorDataS
 
 CursorData generate_cursor_data(CXCursor cursor, CXTranslationUnit unit);
 enum CXChildVisitResult visitor_callback(CXCursor currentCursor, CXCursor parent, CXClientData clangData);
-enum CXChildVisitResult visitor_parent_callback(CXCursor currentCursor, CXCursor parent, CXClientData clangData);
-enum CXChildVisitResult visitor_child_callback(CXCursor currentCursor, CXCursor parent, CXClientData clangData);
+void dispose_containers();
+void print_lists();
 
 
 #endif // PARSE_UNIT 

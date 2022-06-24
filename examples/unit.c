@@ -5,55 +5,73 @@
 #include "header.h"
 
 
-#ifndef APHY_TYPES_H
-#define APHY_TYPES_H
-
-#include <stdint.h>
-#include <stddef.h>
-#include <stdbool.h>
-#include <limits.h>
-#include <inttypes.h>
-
-#if defined(_MSC_VER)
-#include <BaseTsd.h>
-typedef SSIZE_T ssize_t;
-#endif
-
-#ifdef _WIN32
-#define EXPORT __declspec(dllexport)
-#else
-#define EXPORT
-#endif
-
-#endif
-
-enum NameE
+//#ifndef APHY_TYPES_H
+//#define APHY_TYPES_H
+//
+//#include <stdint.h>
+//#include <stddef.h>
+//#include <stdbool.h>
+//#include <limits.h>
+//#include <inttypes.h>
+//
+//#if defined(_MSC_VER)
+//#include <BaseTsd.h>
+//typedef SSIZE_T ssize_t;
+//#endif
+//
+//#ifdef _WIN32
+//#define EXPORT __declspec(dllexport)
+//#else
+//#define EXPORT
+//#endif
+//
+//#endif
+//
+enum Enum1
 {
 	ZERO,
 	ONE,
 	TWO = 4,
 };
 
-#define MACRO 42
-#define FMACRO(x) (x+1)
+typedef enum Enum2
+{
+	THREE = 3,
+	FOUR,
+	FIVE,
+} TEnum2;
 
-typedef struct NameS
+
+#define MACROINT 42
+#define MACROSTR "stringmacro"
+#define MACROFUNC(x) (x+1)
+
+
+struct Struct1
 {
 	const char* key;
 	struct NameS* next;
 	int arr[MACRO];
-	UnknownType filed;
+	UnknownType field;
 	size_t xy;
 	uint16_t ij;
-} Name;
+};
+
+typedef void(*function)(UnknownType*);
+
+typedef struct Struct2
+{
+	int anotherint;
+	function funct;
+} TStruct2;
 
 
-void function(UnknownType* arg) 
+void* function1(UnknownType* arg) 
 {
 	return;
 }
 
-int main(int argc, char** argv)
+int function2(int argc, char** argv)
 {
 	Name instance = { "key", 1, NULL };
 	int result = foo(instance.value);

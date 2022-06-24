@@ -3,4 +3,10 @@
 
 typedef char** UnknownType;
 
+struct NameS
+{
+	int field;
+};
+
+
 #endif // _HEADER

@@ -2,20 +2,13 @@
 
 /* NOTES
  * 
- * Libclang errors might appear in execution process, e.g.: 
+ * libclang errors might appear in execution process, e.g.: 
  * "variable has incomplete type" and like this. It's OK and
  * made in purpose of parcing only given files without
  * managing both system and users header files.
  *
  * */
 
-// TBD: fix problem with duplicating when typedef (see may be canonical)  // check previous structure (if the same then skip)
-// TBD: parse macros = clang_Cursor_isMacroFunctionLike() 
-// TBD: enum constants value = clang_getEnumConstantDeclValue()
-// TBD: add callback logic
-// TBD: parse underlying typedef type = clang_getTypedefDeclUnderlyingType()
-// TBD: (?) combine visitor callbacks into one function
-// TBD: rename parent to parent, child to child
 
 /*--------------------------------------------------------------*
  *                          DEFINES                             *
@@ -79,9 +72,15 @@ int main(int argc, char** argv)
          clang_visitChildren(root, visitor_callback, clangData);
     }
 
-    // free resources
+    // free clang resources
     clang_disposeTranslationUnit(unit);
     clang_disposeIndex(index);
+
+    // debug
+    print_lists();
+
+    // free programm resources
+    dispose_containers();
 
     return 0;
 }
