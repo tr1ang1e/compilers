@@ -1,33 +1,44 @@
 #include "parse_unit.h"
 
+
 /*--------------------------------------------------------------*
  *               STATIC FUNCTIONS PROTOTYPES                    *
  *--------------------------------------------------------------*/
 
 // callback functions
-static void cursor_handler_struct(CXCursor cursor, CXClientData clangData);
-static void cursor_handler_enum(CXCursor cursor, CXClientData clangData);
-static void cursor_handler_field(CXCursor cursor, CXClientData clangData);
-static void cursor_handler_enum_constant(CXCursor cursor, CXClientData clangData);
-static void cursor_handler_function(CXCursor cursor, CXClientData clangData);
-static void cursor_handler_parameter(CXCursor cursor, CXClientData clangData);
-static void cursor_handler_typedef(CXCursor cursor, CXClientData clangData);
-static void cursor_handler_macro(CXCursor cursor, CXClientData clangData);
+static void cursor_handler_struct(CXCursor cursor, CursorData cursorData);
+static void cursor_handler_enum(CXCursor cursor, CursorData cursorData);
+static void cursor_handler_field(CXCursor cursor, CursorData cursorData);
+static void cursor_handler_enum_constant(CXCursor cursor, CursorData cursorData);
+static void cursor_handler_function(CXCursor cursor, CursorData cursorData);
+static void cursor_handler_parameter(CXCursor cursor, CursorData cursorData);                       //  not used due to excluding decl_parameter kind from handling
+static void cursor_handler_typedef(CXCursor cursor, CursorData cursorData);
+static void cursor_handler_macro(CXCursor cursor, CursorData cursorData);
 
 // get cursor common information
+static CursorCategory get_cursor_category(CXCursor cursor);                                         // used separetely from CursorData structure
 static CursorKind get_cursor_kind(CXCursor cursor);
-static const char* get_cursor_type(CXCursor cursor);
-static const char* get_cursor_name(CXCursor cursor);
+static CXString get_cursor_type(CXCursor cursor, bool canonical);
+static CXString get_cursor_name(CXCursor cursor);
 static CursorLocation get_cursor_location(CXCursor cursor);
 static CursorTokens get_cursor_tokens(CXCursor cursor, CXTranslationUnit unit);
+
+// disposing resources
+static void dispose_cursor_data(CursorData cursorData);
+static void dispose_structures();
+static void dispose_enums();
+static void dispose_fields(ListNode** fields);
+static void dispose_enum_constants(ListNode** enumConstants);
+static void dispose_functions();
+static void dispose_typedefs();
+static void dispose_macros();
 
 // utilities
 static bool is_from_given_file(CXCursor cursor);                                                    // true if is from given file, false otherwise
 static int find_cursor_kind(CXCursor cursor, CursorKind* cursorKindsArray, size_t arraySize);       // index of given array if success, -1 otherwise
-static CursorCategory get_cursor_category(CXCursor cursor);
-static const char* get_token_string(CXToken token, CXTranslationUnit unit);
+static char* get_string(CXString clangString);
 static int get_string_token(const char* source, char** destination, char separator);
-static const char** get_parameters_types(CXCursor cursor);
+static char** get_parameters_types(CXCursor cursor);
 static void print_cursor_data(CursorData cursorData);
 
 
@@ -35,11 +46,11 @@ static void print_cursor_data(CursorData cursorData);
  *                        CONTAINERS                            *
  *--------------------------------------------------------------*/
 
-ListNode* structures     = NULL;
-ListNode* enums          = NULL;
-ListNode* functions      = NULL;
-ListNode* typedefs       = NULL;
-ListNode* macros         = NULL;
+ListNode* structures  = NULL;      // dispose after list was used
+ListNode* enums       = NULL;      // dispose after list was used
+ListNode* functions   = NULL;      // dispose after list was used
+ListNode* typedefs    = NULL;      // dispose after list was used
+ListNode* macros      = NULL;      // dispose after list was used
 
 
 /*--------------------------------------------------------------*
@@ -50,16 +61,16 @@ static CursorKind cursorParentKinds[] =
 {
     { CXCursor_StructDecl        , "decl_struct"         ,  cursor_handler_struct        },
     { CXCursor_EnumDecl          , "decl_enum"           ,  cursor_handler_enum          },
-    { CXCursor_TypedefDecl       , "decl_typedef"        ,  cursor_handler_typedef       },
     { CXCursor_MacroDefinition   , "decl_macro"          ,  cursor_handler_macro         },
 };
 
 static CursorKind cursorChildKinds[] =
 {
-    { CXCursor_FieldDecl         , "decl_field"          ,  cursor_handler_field         },
-    { CXCursor_EnumConstantDecl  , "decl_enum_constant"  ,  cursor_handler_enum_constant },
+    { CXCursor_FieldDecl         , "decl_field"          ,  cursor_handler_field         }, 
+    { CXCursor_EnumConstantDecl  , "decl_enum_constant"  ,  cursor_handler_enum_constant }, 
     { CXCursor_FunctionDecl      , "decl_function"       ,  cursor_handler_function      },
- // { CXCursor_ParmDecl          , "decl_parameter"      ,  cursor_handler_parameter     },  // replaced with clang_Cursor_getArgument() in function handler
+//  { CXCursor_ParmDecl          , "decl_parameter"      ,  cursor_handler_parameter     },  // replaced with clang_Cursor_getArgument() in function handler
+    { CXCursor_TypedefDecl       , "decl_typedef"        ,  cursor_handler_typedef       },  // migth me excluded because of clang_getCanonicalType()
 };
 
 
@@ -67,39 +78,29 @@ static CursorKind cursorChildKinds[] =
  *                          DEBUG                               *
  *--------------------------------------------------------------*/
 
-bool print_cursor_kind(CXCursor cursor)
+void print_cursor_data(CursorData cursorData)
 {
-    enum CXCursorKind cursorKindEnum = clang_getCursorKind(cursor);
-    
-    if (cursorKindEnum == CXCursor_MacroDefinition)
+    // kind, type, name 
+    char* type = get_string(cursorData.type);
+    char* name = get_string(cursorData.name);
+    char* file = get_string(cursorData.location.file);
+    printf("  %s %-24s %-22s %s:%u:%-10u     ",
+        cursorData.kind.string, 
+        type, name,
+        file, cursorData.location.line, cursorData.location.column
+    );
+    free(type);
+    free(name);
+    free(file);
+
+    // tokens
+    for (unsigned token = 0; token < cursorData.tokens.tokensNumber; ++token)
     {
-        if (!clang_Cursor_isMacroFunctionLike(cursor))
-        {
-            CXString cursorKind = clang_getCursorKindSpelling(cursorKindEnum);
-            const char* cursorKindString = clang_getCString(cursorKind);
-            clang_disposeString(cursorKind);
-            printf(" : %s", cursorKindString);
-
-            return true;
-        }
+        CXString tokenSpelling = clang_getTokenSpelling(cursorData.unit, cursorData.tokens.tokensArray[token]);
+        printf(":%s ", clang_getCString(tokenSpelling));
+        clang_disposeString(tokenSpelling);
     }
-
-    return false;
-}
-
-bool print_cursor_location(CXCursor cursor)
-{
-    CursorLocation location = get_cursor_location(cursor);
-    printf(" : %s:%u:%u", location.file, location.line, location.column);
-    
-    return true;
-}
-
-bool print_cursor_name(CXCursor cursor)
-{
-    printf(" : %s", get_cursor_name(cursor));
-
-    return true;
+    printf("\n");
 }
 
 
@@ -113,7 +114,7 @@ CursorData generate_cursor_data(CXCursor cursor, CXTranslationUnit unit)
     {
         .unit = unit,
         .kind = get_cursor_kind(cursor),
-        .type = get_cursor_type(cursor),
+        .type = get_cursor_type(cursor, true),
         .name = get_cursor_name(cursor),
         .location = get_cursor_location(cursor),
         .tokens = get_cursor_tokens(cursor, unit),
@@ -126,8 +127,8 @@ enum CXChildVisitResult visitor_callback(CXCursor currentCursor, CXCursor parent
 {
     // recursively find parents then handle them and their children  
 
-    enum CXChildVisitResult visitResult = CXChildVisit_Recurse;    // default for parent kind and for kinds we dont't need 
-    CursorData cursorData = { 0 };
+    enum CXChildVisitResult visitResult = CXChildVisit_Recurse;     // default for parent kind and for kinds we dont't need 
+    CursorData cursorData = { 0 };                                  // handle all necessary data in convinient form
 
     do
     {
@@ -143,13 +144,12 @@ enum CXChildVisitResult visitor_callback(CXCursor currentCursor, CXCursor parent
             break;
         }
 
-        // common data
+        // common data = generate from cursor
         CXTranslationUnit unit = ((ClientData*)clangData)->unit;    // deserialize argument given by caller
         cursorData = generate_cursor_data(currentCursor, unit);
 
-        // handle cursor with callback
-        CXClientData data = (CXClientData)&cursorData;
-        cursorData.kind.handler(currentCursor, data);
+        // handle cursor = use commond data and cursor itself
+        cursorData.kind.handler(currentCursor, cursorData);
 
         switch (category.category)
         {
@@ -166,8 +166,8 @@ enum CXChildVisitResult visitor_callback(CXCursor currentCursor, CXCursor parent
         // debug
         // print_cursor_data(cursorData);
 
-        // clean up
-        // clang_disposeTokens(cursorData.unit, cursorData.tokens.tokensArray, cursorData.tokens.tokensNumber);
+        // common data = dispose resources
+        dispose_cursor_data(cursorData);
 
     } while (0);
 
@@ -176,62 +176,101 @@ enum CXChildVisitResult visitor_callback(CXCursor currentCursor, CXCursor parent
 
 void dispose_containers()
 {
-
+    dispose_structures();
+    dispose_enums();
+    dispose_functions();
+    dispose_typedefs();
+    dispose_macros();
 }
 
 void print_lists()
 {    
     printf("\n");
-    
-    // structures
-    
-    StructType* currentStruct = GET_NODE(structures, StructType, next);
-    printf("  :: STRUCTS :: \n");
-    
-    printf(" %s \n", currentStruct->name);
-    while (currentStruct->next.next)
+
+    // ------------------------------ structures ------------------------------ //
+
+    if (structures)
     {
-        currentStruct = GET_NODE(currentStruct->next.next, StructType, next);
+        printf("  :: STRUCTS :: \n");
+    
+        // first structure
+        StructType* currentStruct = GET_NODE(structures, StructType, next);
         printf(" %s \n", currentStruct->name);
+
+        FieldType* currentField = GET_NODE(currentStruct->fields, FieldType, next);
+        printf("    %-20s  %-20s \n", currentField-> type, currentField->name);
+        while (currentField->next.next)
+        {
+            currentField = GET_NODE(currentField->next.next, FieldType, next);
+            printf("    %-20s  %-20s \n", currentField->type, currentField->name);
+        }
+
+
+        // other structures
+        while (currentStruct->next.next)
+        {
+            currentStruct = GET_NODE(currentStruct->next.next, StructType, next);
+            printf(" %s \n", currentStruct->name);
+
+            FieldType* currentField = GET_NODE(currentStruct->fields, FieldType, next);
+            printf("    %-20s  %-20s \n", currentField->type, currentField->name);
+            while (currentField->next.next)
+            {
+                currentField = GET_NODE(currentField->next.next, FieldType, next);
+                printf("    %-20s  %-20s \n", currentField->type, currentField->name);
+            }
+        }
+        printf("\n");
     }
-    printf("\n");
 
-    // enums
 
-    EnumType* currentEnum = GET_NODE(enums, EnumType, next);
-    printf(" :: ENUMS :: \n");
-
-    printf(" %s \n", currentEnum->name);
-    while (currentEnum->next.next)
+    // -------------------------------- enums -------------------------------- //
+    
+    if (enums)
     {
-        currentEnum = GET_NODE(currentEnum->next.next, EnumType, next);
+        printf(" :: ENUMS :: \n");
+    
+        // first enum
+        EnumType* currentEnum = GET_NODE(enums, EnumType, next);
         printf(" %s \n", currentEnum->name);
+        EnumConstantType* currentEnumConstant = GET_NODE(currentEnum->constants, EnumConstantType, next);
+        printf("    %s = %d \n", currentEnumConstant->name, currentEnumConstant->value);
+        while (currentEnumConstant->next.next)
+        {
+            currentEnumConstant = GET_NODE(currentEnumConstant->next.next, EnumConstantType, next);
+            printf("    %s = %d \n", currentEnumConstant->name, currentEnumConstant->value);
+        }
+
+        // other enums
+        while (currentEnum->next.next)
+        {
+            currentEnum = GET_NODE(currentEnum->next.next, EnumType, next);
+            printf(" %s \n", currentEnum->name);
+
+            currentEnumConstant = GET_NODE(currentEnum->constants, EnumConstantType, next);
+            printf("    %s = %d \n", currentEnumConstant->name, currentEnumConstant->value);
+            while (currentEnumConstant->next.next)
+            {
+                currentEnumConstant = GET_NODE(currentEnumConstant->next.next, EnumConstantType, next);
+                printf("    %s = %d \n", currentEnumConstant->name, currentEnumConstant->value);
+            }
+
+        }
+        printf("\n");
     }
-    printf("\n");
 
-    // functions
 
-    FunctionType* currentFunction = GET_NODE(functions, FunctionType, next);
-    printf(" :: FUNCTIONS :: \n");
 
-    printf(" %-10s", currentFunction->returnType);
-    printf(" %-15s", currentFunction->name);
-    int i = 0;
-    const char* argType = currentFunction->argsTypes[i];
-    while (argType)
+    // ------------------------------ functions ------------------------------ //
+    
+    if (functions)
     {
-        printf(" %s  ", argType);
-        ++i;
-        argType = currentFunction->argsTypes[i];
-    }
-    printf("\n");
+        printf(" :: FUNCTIONS :: \n");
 
-    while (currentFunction->next.next)
-    {
-        currentFunction = GET_NODE(currentFunction->next.next, FunctionType, next);
+        // first function
+        FunctionType* currentFunction = GET_NODE(functions, FunctionType, next);
         printf(" %-10s", currentFunction->returnType);
         printf(" %-15s", currentFunction->name);
-
         int i = 0;
         const char* argType = currentFunction->argsTypes[i];
         while (argType)
@@ -240,61 +279,89 @@ void print_lists()
             ++i;
             argType = currentFunction->argsTypes[i];
         }
+        printf("\n");
+
+        // other functions
+        while (currentFunction->next.next)
+        {
+            currentFunction = GET_NODE(currentFunction->next.next, FunctionType, next);
+            printf(" %-10s", currentFunction->returnType);
+            printf(" %-15s", currentFunction->name);
+
+            int i = 0;
+            const char* argType = currentFunction->argsTypes[i];
+            while (argType)
+            {
+                printf(" %s  ", argType);
+                ++i;
+                argType = currentFunction->argsTypes[i];
+            }
+        }
+        printf("\n\n");
     }
-    printf("\n\n");
 
-    // typedefs
 
-    TypedefType* currentTypedef = GET_NODE(typedefs, TypedefType, next);
-    printf(" :: TYPEDEFS :: \n");
 
-    printf(" %-10s", currentTypedef->alias);
-    printf(" %s \n", currentTypedef->underlyingType);
-    while (currentTypedef->next.next)
+    // ------------------------------- typedefs ------------------------------ //
+    
+    if (typedefs)
     {
-        currentTypedef = GET_NODE(currentTypedef->next.next, TypedefType, next);
+        printf(" :: TYPEDEFS :: \n");
+
+        // first typedef
+        TypedefType* currentTypedef = GET_NODE(typedefs, TypedefType, next);
         printf(" %-10s", currentTypedef->alias);
         printf(" %s \n", currentTypedef->underlyingType);
+    
+        // other tyedefs
+        while (currentTypedef->next.next)
+        {
+            currentTypedef = GET_NODE(currentTypedef->next.next, TypedefType, next);
+            printf(" %-10s", currentTypedef->alias);
+            printf(" %s \n", currentTypedef->underlyingType);
+        }
+        printf("\n");
     }
-    printf("\n");
 
-    // macros
 
-    MacroType* currentMacro = GET_NODE(macros, MacroType, next);
-    printf(" :: TYPEDEFS :: \n");
 
-    printf(" %-10s", currentMacro->name);
-    printf(" %s \n", currentMacro->value);
-    while (currentMacro->next.next)
+    // -------------------------------- macros ------------------------------- //
+    if (macros)
     {
-        currentMacro = GET_NODE(currentMacro->next.next, MacroType, next);
+        printf(" :: MACROS :: \n");
+
+        // first macro
+        MacroType* currentMacro = GET_NODE(macros, MacroType, next);
         printf(" %-10s", currentMacro->name);
         printf(" %s \n", currentMacro->value);
+    
+        // other macros
+        while (currentMacro->next.next)
+        {
+            currentMacro = GET_NODE(currentMacro->next.next, MacroType, next);
+            printf(" %-10s", currentMacro->name);
+            printf(" %s \n", currentMacro->value);
+        }
+        printf("\n");
     }
-    printf("\n");
 }
 
 /*--------------------------------------------------------------*
  *                          STATIC                              *
  *--------------------------------------------------------------*/
 
-/* 
- * fileds, enumConstants  >>  check last parent, if pointer to them not null, skip, otherwise add
- * parameters  >>  get last parent, add
- * 
- * */
+ // callback functions
 
-void cursor_handler_struct(CXCursor cursor, CXClientData clangData)
+void cursor_handler_struct(CXCursor cursor, CursorData cursorData)
 {
-    CursorData cursorData = *(CursorData*)clangData;        // data for new instance
     StructType* newInstance = NULL;                         // new instance
     ListNode* last = get_last_node(structures);             // node of the last instance
     
     // debug
     // print_cursor_data(cursorData);
 
-    bool init = !last;                                                                          // create instance and place first
-    bool link = last && strcmp((GET_NODE(last, StructType, next))->name, cursorData.name);      // create instance and place last
+    bool init = !last;                                                                                      // create instance and place first
+    bool link = last && strcmp((GET_NODE(last, StructType, next))->name, get_string(cursorData.name));      // create instance and place last
     
     if (init || link) 
     {
@@ -305,14 +372,16 @@ void cursor_handler_struct(CXCursor cursor, CXClientData clangData)
             return;
         }
         newInstance->next.next = NULL;
-        
-        newInstance->name = cursorData.name;
+        newInstance->name = get_string(cursorData.name);
+        newInstance->fields = NULL;    // necessary for handle fields
     }
     else 
     {
         // list is not empty but new instance is the same as the last. Do nothing
+        // occurs when typedef and type declaration are combined
     }
 
+    // insert
     if (init)
     {
         structures = &newInstance->next;
@@ -323,14 +392,13 @@ void cursor_handler_struct(CXCursor cursor, CXClientData clangData)
     }   
 }
 
-void cursor_handler_enum(CXCursor cursor, CXClientData clangData)
+void cursor_handler_enum(CXCursor cursor, CursorData cursorData)
 {
-    CursorData cursorData = *(CursorData*)clangData;        // data for new instance
     EnumType* newInstance = NULL;                           // new instance
     ListNode* last = get_last_node(enums);                  // node of the last instance
 
-    bool init = !last;                                                                        // create instance and place first
-    bool link = last && strcmp((GET_NODE(last, EnumType, next))->name, cursorData.name);      // create instance and place last
+    bool init = !last;                                                                                    // create instance and place first
+    bool link = last && strcmp((GET_NODE(last, EnumType, next))->name, get_string(cursorData.name));      // create instance and place last
 
     if (init || link)
     {
@@ -341,14 +409,16 @@ void cursor_handler_enum(CXCursor cursor, CXClientData clangData)
             return;
         }
         newInstance->next.next = NULL;
-        
-        newInstance->name = cursorData.name;
-    }
+        newInstance->name = get_string(cursorData.name);
+        newInstance->constants = NULL;    // necessary for handle constants
+    }  
     else
     {
         // list is not empty but new instance is the same as the last. Do nothing
+        // occurs when typedef and type declaration are combined
     }
 
+    // insert
     if (init)
     {
         enums = &newInstance->next;
@@ -359,30 +429,82 @@ void cursor_handler_enum(CXCursor cursor, CXClientData clangData)
     }
 }
 
-void cursor_handler_field(CXCursor cursor, CXClientData clangData)
+void cursor_handler_field(CXCursor cursor, CursorData cursorData)
 {
-    CursorData cursorData = *(CursorData*)clangData;
+    // enums container stored in corresponding enum node of enums list
+    ListNode* structDeclaration = get_last_node(structures);
+    StructType* structInstance = GET_NODE(structDeclaration, StructType, next);
 
+    FieldType* newInstance = NULL;                              // new instance
+    ListNode* last = get_last_node(structInstance->fields);       // node of the last instance
 
+    // debug
+    // print_cursor_data(cursorData);
+
+    // create new instance
+    newInstance = (FieldType*)malloc(sizeof(FieldType));
+    if (!newInstance)
+    {
+        return;
+    }
+    newInstance->next.next = NULL;
+    newInstance->name = get_string(cursorData.name);
+
+    CXString type = get_cursor_type(cursor, true);
+    newInstance->type = get_string(type);
+    clang_disposeString(type);
+
+    // insert
+    if (!last)
+    {
+        structInstance->fields = &newInstance->next;
+    }
+    else
+    {
+        last->next = &newInstance->next;
+    }
 }
 
-void cursor_handler_enum_constant(CXCursor cursor, CXClientData clangData)
+void cursor_handler_enum_constant(CXCursor cursor, CursorData cursorData)
 {
-    CursorData cursorData = *(CursorData*)clangData;
+    // enums container stored in corresponding enum node of enums list
+    ListNode* enumDeclaration = get_last_node(enums);
+    EnumType* enumInstance = GET_NODE(enumDeclaration, EnumType, next);
+    
+    EnumConstantType* newInstance = NULL;                         // new instance
+    ListNode* last = get_last_node(enumInstance->constants);      // node of the last instance
+    
+    // debug
+    // print_cursor_data(cursorData);
+    
+    // create new instance
+    newInstance = (EnumConstantType*)malloc(sizeof(EnumConstantType));
+    if (!newInstance)
+    {
+        return;
+    }
+    newInstance->next.next = NULL;
+    newInstance->name = get_string(cursorData.name);
+    newInstance->value = (int)clang_getEnumConstantDeclValue(cursor);
 
-    // clang_getEnumConstantDeclValue()
-
-
+    // insert
+    if (!last)
+    {
+        enumInstance->constants = &newInstance->next;
+    }
+    else
+    {
+        last->next = &newInstance->next;
+    }
 }
 
-void cursor_handler_function(CXCursor cursor, CXClientData clangData)
+void cursor_handler_function(CXCursor cursor, CursorData cursorData)
 {
-    CursorData cursorData = *(CursorData*)clangData;        // data for new instance
     FunctionType* newInstance = NULL;                       // new instance
     ListNode* last = get_last_node(functions);              // node of the last instance
 
     // debug
-    print_cursor_data(cursorData);
+    // print_cursor_data(cursorData);
 
     // create new instance
     newInstance = (FunctionType*)malloc(sizeof(FunctionType));
@@ -392,14 +514,23 @@ void cursor_handler_function(CXCursor cursor, CXClientData clangData)
     }
     newInstance->next.next = NULL;
 
-    // function type and name information
-    int index = 0;
-    index = get_string_token(&cursorData.name[0], &newInstance->name, '(');
-    index = get_string_token(&cursorData.type[0], &newInstance->returnType, '(');
+    // function type 
+    CXType cursorType = clang_getCursorType(cursor);
+    CXType canonicalType = clang_getCanonicalType(cursorType);
+    CXType resultType = clang_getResultType(canonicalType);
+    CXString typeSpelling = clang_getTypeSpelling(resultType);
+    newInstance->returnType = get_string(typeSpelling);
+    clang_disposeString(typeSpelling);
+    
+    // function name
+    int index = 0; 
+    const char* fullName = get_string(cursorData.name);
+    index = get_string_token(&fullName[0], &newInstance->name, '(');
 
     // handle function arguments
     newInstance->argsTypes = get_parameters_types(cursor);
 
+    // insert
     if (!last)
     {
         functions = &newInstance->next;
@@ -410,14 +541,13 @@ void cursor_handler_function(CXCursor cursor, CXClientData clangData)
     }
 }
 
-void cursor_handler_parameter(CXCursor cursor, CXClientData clangData)  //  not used due to excuding decl_parameter kind from handling
+void cursor_handler_parameter(CXCursor cursor, CursorData cursorData) 
 {
-    CursorData cursorData = *(CursorData*)clangData;
+
 }
 
-void cursor_handler_typedef(CXCursor cursor, CXClientData clangData)
+void cursor_handler_typedef(CXCursor cursor, CursorData cursorData)
 {
-    CursorData cursorData = *(CursorData*)clangData;        // data for new instance
     TypedefType* newInstance = NULL;                        // new instance
     ListNode* last = get_last_node(typedefs);               // node of the last instance
 
@@ -431,12 +561,15 @@ void cursor_handler_typedef(CXCursor cursor, CXClientData clangData)
         return;
     }
     newInstance->next.next = NULL;
-    newInstance->alias = cursorData.name;
+    newInstance->alias = get_string(cursorData.name);
 
+    // underlying type
     CXType underlyingType = clang_getTypedefDeclUnderlyingType(cursor);
     CXString underlyingTypeString = clang_getTypeSpelling(underlyingType);
-    newInstance->underlyingType = clang_getCString(underlyingTypeString);
-     
+    newInstance->underlyingType = get_string(underlyingTypeString);
+    clang_disposeString(underlyingTypeString);
+
+    // insert
     if (!last)
     {
         typedefs = &newInstance->next;
@@ -447,14 +580,20 @@ void cursor_handler_typedef(CXCursor cursor, CXClientData clangData)
     }
 }
 
-void cursor_handler_macro(CXCursor cursor, CXClientData clangData)
+void cursor_handler_macro(CXCursor cursor, CursorData cursorData)
 {
-    if (clang_Cursor_isMacroFunctionLike(cursor))
+    // filter out function-like macros
+    if (clang_Cursor_isMacroFunctionLike(cursor))  
+    {
+        return;
+    }
+
+    // only macros representing constants
+    if (cursorData.tokens.tokensNumber != 2)  
     {
         return;
     }
     
-    CursorData cursorData = *(CursorData*)clangData;        // data for new instance
     MacroType* newInstance = NULL;                          // new instance
     ListNode* last = get_last_node(macros);                 // node of the last instance
 
@@ -468,11 +607,14 @@ void cursor_handler_macro(CXCursor cursor, CXClientData clangData)
         return;
     }
     newInstance->next.next = NULL;
-    newInstance->name = cursorData.name;
+    newInstance->name = get_string(cursorData.name);
 
+    // macro value = token on the 1 index position
     CXString tokenSpelling = clang_getTokenSpelling(cursorData.unit, cursorData.tokens.tokensArray[1]);
-    newInstance->value = clang_getCString(tokenSpelling);
+    newInstance->value =get_string(tokenSpelling);
+    clang_disposeString(tokenSpelling);
 
+    // insert
     if (!last)
     {
         macros = &newInstance->next;
@@ -481,6 +623,39 @@ void cursor_handler_macro(CXCursor cursor, CXClientData clangData)
     {
         last->next = &newInstance->next;
     }
+}
+
+// get cursor common information
+
+CursorCategory get_cursor_category(CXCursor cursor)
+{
+    CursorCategory category =
+    {
+        .category = CURSOR_UNKNOWN_E,
+        .index = -1
+    };
+
+    do
+    {
+        // handle cursor parent kinds
+        category.index = find_cursor_kind(cursor, cursorParentKinds, ARRAY_SIZE(cursorParentKinds));
+        if (category.index != -1)
+        {
+            category.category = CURSOR_PARENT_E;
+            break;
+        }
+
+        // handle cursor child kinds
+        category.index = find_cursor_kind(cursor, cursorChildKinds, ARRAY_SIZE(cursorChildKinds));
+        if (category.index != -1)
+        {
+            category.category = CURSOR_CHILD_E;
+            break;
+        }
+
+    } while (0);
+
+    return category;
 }
 
 CursorKind get_cursor_kind(CXCursor cursor)
@@ -514,41 +689,34 @@ CursorKind get_cursor_kind(CXCursor cursor)
     return kind;
 }
 
-const char* get_cursor_type(CXCursor cursor)
+CXString get_cursor_type(CXCursor cursor, bool canonical)
 {
-    const char* type = NULL;
-
     CXType cursorType = clang_getCursorType(cursor);
-    CXString cursorTypeString = clang_getTypeSpelling(cursorType);
-    type = clang_getCString(cursorTypeString);
-    // clang_disposeString(cursorTypeString);
+    
+    if (canonical)
+    {
+        cursorType = clang_getCanonicalType(cursorType);
+    }
 
-    return type;
+    CXString cursorTypeString = clang_getTypeSpelling(cursorType);
+
+    return cursorTypeString;
 }
 
-const char* get_cursor_name(CXCursor cursor)
+CXString get_cursor_name(CXCursor cursor)
 {
-    const char* name = NULL;
-
     CXString cursorName = clang_getCursorDisplayName(cursor);
-    name = clang_getCString(cursorName);
-    // clang_disposeString(cursorName);
-
-    return name;
+    return cursorName;
 }
 
 CursorLocation get_cursor_location(CXCursor cursor)
 {
     CXSourceLocation sourceLocation = clang_getCursorLocation(cursor);
-
     CursorLocation cursorLocation = { 0 };
+    
     CXFile file;
-
     clang_getFileLocation(sourceLocation, &file, &cursorLocation.line, &cursorLocation.column, NULL);
-
-    CXString cursorFile = clang_getFileName(file);
-    cursorLocation.file = clang_getCString(cursorFile);
-    // clang_disposeString(cursorFile);
+    cursorLocation.file = clang_getFileName(file);
 
     return cursorLocation;
 }
@@ -563,6 +731,196 @@ CursorTokens get_cursor_tokens(CXCursor cursor, CXTranslationUnit unit)
 
     return tokens;
 }
+
+// disposing resources
+
+void dispose_cursor_data(CursorData cursorData)
+{
+    clang_disposeString(cursorData.type);
+    clang_disposeString(cursorData.name);
+    clang_disposeString(cursorData.location.file);
+    clang_disposeTokens(cursorData.unit, cursorData.tokens.tokensArray, cursorData.tokens.tokensNumber);
+}
+
+void dispose_structures()
+{
+    StructType* current, * temp;
+    if (structures)
+    {
+        current = GET_NODE(structures, StructType, next);
+        while (current)
+        {
+            temp = GET_NODE(current->next.next, StructType, next);
+
+            free(current->name);
+            current->name = NULL;
+
+            dispose_fields(&current->fields);
+
+            current = temp;
+        }
+
+        free(structures);
+        structures = NULL;
+    }
+}
+
+void dispose_enums()
+{
+    EnumType* current, * temp;
+    if (enums)
+    {
+        current = GET_NODE(enums, EnumType, next);
+        while (current)
+        {
+            temp = GET_NODE(current->next.next, EnumType, next);
+
+            free(current->name);
+            current->name = NULL;
+
+            dispose_enum_constants(&current->constants);
+
+            current = temp;
+        }
+
+        free(enums);
+        enums = NULL;
+    }
+}
+
+void dispose_fields(ListNode** fields)
+{
+    FieldType* current, * temp;
+    if (*fields)
+    {
+        current = GET_NODE(*fields, FieldType, next);
+        while (current)
+        {
+            temp = GET_NODE(current->next.next, FieldType, next);
+
+            free(current->name);
+            current->name = NULL;
+
+            free(current->type);
+            current->type = NULL;
+
+            current = temp;
+        }
+
+        free(*fields);
+        *fields = NULL;
+    }
+}
+
+void dispose_enum_constants(ListNode** enumConstants)
+{
+    EnumConstantType* current, * temp;
+    if (*enumConstants)
+    {
+        current = GET_NODE(*enumConstants, EnumConstantType, next);
+        while (current)
+        {
+            temp = GET_NODE(current->next.next, EnumConstantType, next);
+
+            free(current->name);
+            current->name = NULL;
+
+            current = temp;
+        }
+
+        free(*enumConstants);
+        *enumConstants = NULL;
+    }
+}
+
+void dispose_functions()
+{
+    FunctionType* current, * temp;
+    if (functions)
+    {
+        current = GET_NODE(functions, FunctionType, next);
+        while (current)
+        {
+            temp = GET_NODE(current->next.next, FunctionType, next);
+
+            free(current->name);
+            current->name = NULL;
+
+            free(current->returnType);
+            current->returnType = NULL;
+
+            if(current->argsTypes)
+            {
+                int argNumber = 0;
+                char* argument = current->argsTypes[argNumber];
+                while (argument)
+                {
+                    free(argument);
+                    ++argNumber;
+                    argument = current->argsTypes[argNumber];
+                }
+
+                free(current->argsTypes);
+                current->argsTypes = NULL;
+            }
+
+            current = temp;
+        }
+
+        free(enums);
+        enums = NULL;
+    }
+}
+
+void dispose_typedefs()
+{
+    TypedefType* current, * temp;
+    if (typedefs)
+    {
+        current = GET_NODE(typedefs, TypedefType, next);
+        while (current)
+        {
+            temp = GET_NODE(current->next.next, TypedefType, next);
+
+            free(current->alias);
+            current->alias = NULL;
+
+            free(current->underlyingType);
+            current->underlyingType = NULL;
+
+            current = temp;
+        }
+
+        free(typedefs);
+        typedefs = NULL;
+    }
+}
+
+void dispose_macros()
+{
+    MacroType* current, * temp;
+    if (macros)
+    {
+        current = GET_NODE(macros, MacroType, next);
+        while (current)
+        {
+            temp = GET_NODE(current->next.next, MacroType, next);
+
+            free(current->name);
+            current->name = NULL;
+
+            free(current->value);
+            current->value = NULL;
+
+            current = temp;
+        }
+
+        free(macros);
+        macros = NULL;
+    }
+}
+
+// utilities
 
 bool is_from_given_file(CXCursor cursor)
 {
@@ -588,49 +946,22 @@ int find_cursor_kind(CXCursor cursor, CursorKind* cursorKindsArray, size_t array
     return index;
 }
 
-CursorCategory get_cursor_category(CXCursor cursor)
+char* get_string(CXString clangString)
 {
-    CursorCategory category =
-    {
-        .category = CURSOR_UNKNOWN_E,
-        .index = -1
-    };
-
-    do
-    {
-        // handle cursor parent kinds
-        category.index = find_cursor_kind(cursor, cursorParentKinds, ARRAY_SIZE(cursorParentKinds));
-        if (category.index != -1)
-        {
-            category.category = CURSOR_PARENT_E;
-            break;
-        }
-
-        // handle cursor child kinds
-        category.index = find_cursor_kind(cursor, cursorChildKinds, ARRAY_SIZE(cursorChildKinds));
-        if (category.index != -1)
-        {
-            category.category = CURSOR_CHILD_E;
-            break;
-        }
-
-    } while (0);
-
-    return category;
-}
-
-const char* get_token_string(CXToken token, CXTranslationUnit unit)
-{
-    const char* tokenString = NULL;
+    const char* temp = clang_getCString(clangString);
+    size_t length = strlen(temp);  
     
-    CXString tokenSpelling = clang_getTokenSpelling(unit, token);
-    tokenString = clang_getCString(tokenSpelling);
-    // clang_disposeString(tokenSpelling);
+    char* string = (char*)malloc(length + 1); // to add '\0'
+    if (string)
+    {
+        strncpy(string, temp, length);
+        string[length] = '\0';
+    }
 
-    return tokenString;
+    return string;
 }
 
-int get_string_token(const char* source, char** destination, char separator)  // return -1 if end of string is achieved, separator index of separator
+int get_string_token(const char* source, char** destination, char separator)  // return -1 if end of string is achieved, otherwise index of separator
 {   
     // get type length
     size_t index;
@@ -660,10 +991,10 @@ int get_string_token(const char* source, char** destination, char separator)  //
     return index;
 }
 
-const char** get_parameters_types(CXCursor cursor)
+char** get_parameters_types(CXCursor cursor)
 {
     int argsNumber = clang_Cursor_getNumArguments(cursor);
-    const char** types = (char**)calloc(sizeof(char**), argsNumber + 1);  // add NULL despite of explicit args number
+    char** types = (char**)calloc(sizeof(char**), argsNumber + 1);  // add NULL to indicate end of args
 
     if (!types)
     {
@@ -674,26 +1005,11 @@ const char** get_parameters_types(CXCursor cursor)
     for (i = 0; i < argsNumber; ++i)
     {
         CXCursor argument = clang_Cursor_getArgument(cursor, i);
-        types[i] = get_cursor_type(argument);
+        CXString type = get_cursor_type(argument, true);
+        types[i] = get_string(type);
+        clang_disposeString(type);
     }
     types[i] = NULL;
 
     return types;
-}
-
-void print_cursor_data(CursorData cursorData)
-{
-    // kind, type, name 
-    printf("  %-20s %-24s %-30s %s:%u:%-10u     ",
-        cursorData.kind.string,
-        cursorData.type, cursorData.name,
-        cursorData.location.file, cursorData.location.line, cursorData.location.column
-    );
-
-    // tokens
-    for (unsigned token = 0; token < cursorData.tokens.tokensNumber; ++token)
-    {
-        printf("%s ", get_token_string(cursorData.tokens.tokensArray[token], cursorData.unit));
-    }
-    printf("\n");
 }

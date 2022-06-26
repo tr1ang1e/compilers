@@ -53,23 +53,23 @@ typedef enum CursorCategoryE
 
 typedef struct FiledTypeS
 {
-	const char* name;		
-	const char* type;		
+	char* name;		
+	char* type;		
 	
 	ListNode next;
 } FieldType;
 
 typedef struct StructTypeS
 {
-	const char* name;						// CXString = free
-	FieldType* zeroField;
+	char* name;						
+	ListNode* fields;
 
 	ListNode next;
 } StructType;
 
 typedef struct EnumConstantTypeS
 {
-	const char* name;		
+	char* name;		
 	int value;
 	
 	ListNode next;
@@ -77,33 +77,33 @@ typedef struct EnumConstantTypeS
 
 typedef struct EnumTypeS
 {
-	const char* name;						// CXString = free
-	EnumConstantType* zeroConst;
+	char* name;						
+	ListNode* constants;
 
 	ListNode next;
 } EnumType;
 
 typedef struct FunctionTypeS
 {
-	char* name;								// malloc = free, CXString = free
-	char* returnType;						// malloc = free
-	const char** argsTypes;
+	char* name;								
+	char* returnType;						
+	char** argsTypes;
 
 	ListNode next;
 } FunctionType;
 
 typedef struct TypedefTypeS
 {
-	const char* alias;						// CXString = free
-	const char* underlyingType;				// CXString = free
+	char* alias;						
+	char* underlyingType;				
 
 	ListNode next;
 } TypedefType;
 
 typedef struct MacroTypeS
 {
-	const char* name;						// CXString = free
-	const char* value;						// CXString = free
+	char* name;	
+	char* value;				
 
 	ListNode next;
 } MacroType;
@@ -113,6 +113,9 @@ typedef struct MacroTypeS
  *                          STRUCTS                             *
  *--------------------------------------------------------------*/
 
+
+struct CursorDataS;		// main cursor data - see definition below
+
 typedef struct ClientDataS
 {
 	CXTranslationUnit unit;
@@ -121,40 +124,40 @@ typedef struct ClientDataS
 typedef struct CursorCategoryS
 {
 	CursorCategoryEnum category;
-	int index;					// index in corresponding array
+	int index;			// index in corresponding array
 } CursorCategory;
 
-typedef void (*cursorCallback)(CXCursor, CXClientData);
+
+typedef void (*cursorCallback)(CXCursor, struct CursorDataS);
 
 typedef struct CursorKindS
 {
-	enum CXCursorKind code;
+	enum CXCursorKind code;		// simple enum constant, no need to dispose
 	const char* string;			// clang-c doesn't provide API to get cursor kind string representation
-	cursorCallback handler;
+	cursorCallback handler;		// pointer to specific callback function
 } CursorKind;
 
 typedef struct CursorLocationS
 {
-	const char* file;
+	CXString file;					
 	unsigned line;
 	unsigned column;
 } CursorLocation;
 
 typedef struct CursorTokensS
 {
-	CXToken* tokensArray;		// must be disposed after usage, call clang_disposeTokens(...)
+	CXToken* tokensArray;		
 	unsigned tokensNumber;
 } CursorTokens;
 
-// main cursor data
 typedef struct CursorDataS
 {
-	CXTranslationUnit unit;		// parsed unit
-	CursorKind kind;			// exact kind
-	const char* type;			// type spelling as it is in the source code
-	const char* name;			// name of entity cursor points to
-	CursorLocation location;	// location of entity cursor point to
-	CursorTokens tokens;		// all of tokens
+	CXTranslationUnit unit;		// parsed unit											! read-only, disposed in function which created unit
+	CursorKind kind;			// exact kind											! nothing to dispose
+	CXString type;				// represent type like is in location or canonical		! dispose after CursorData was used
+	CXString name;				// represent cursor name								! dispose after CursorData was used
+	CursorLocation location;	// location of entity cursor point to					! dispose after CursorData was used
+	CursorTokens tokens;		// all of tokens										! dispose after CursorData was used
 } CursorData;
 
 

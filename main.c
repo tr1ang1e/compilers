@@ -9,6 +9,9 @@
  *
  * */
 
+// TBD: add list of units to be parsed
+// TBD: reimplement contatiners from separate variables to iterable array
+
 
 /*--------------------------------------------------------------*
  *                          DEFINES                             *
@@ -18,6 +21,7 @@
 #define SEP '/'
 #elif _WIN32
 #define SEP '\\'
+#else
 #endif
 
 // trace macro
@@ -31,9 +35,16 @@
 
 int main(int argc, char** argv)
 {
-    // main settings
-    const char* unitName = "examples/unit.c";               // TBD: add list of units to be parsed
-    const char* argsList[] = { "-I./examples/include" };    // -I<headers_path> 
+    const char* unitName = "examples/unit.c"; 
+
+    const char* argsList[] =  // https://gcc.gnu.org/onlinedocs/gcc/Preprocessor-Options.html
+    { 
+        "-I./examples/include",          
+        "-D__linux__",
+        "-U_WIN32",
+        // additional = `clang -prent-targets` , clang.llvm.org/docs/CrossCompilation.html
+    };   
+    
     int argsNumber = ARRAY_SIZE(argsList);                  
 
     // additional parser settings (add CXTranslationUnit_SingleFileParse to avoid includes parsing)
@@ -68,8 +79,7 @@ int main(int argc, char** argv)
 
         // initiate traversal
         CXCursor root = clang_getTranslationUnitCursor(unit);
-        // clang_visitChildren(root, visitor_parent_callback, clangData);
-         clang_visitChildren(root, visitor_callback, clangData);
+        clang_visitChildren(root, visitor_callback, clangData);
     }
 
     // free clang resources

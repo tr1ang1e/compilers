@@ -19,30 +19,38 @@
 //typedef SSIZE_T ssize_t;
 //#endif
 //
-//#ifdef _WIN32
-//#define EXPORT __declspec(dllexport)
-//#else
-//#define EXPORT
-//#endif
+#ifdef __linux__
+#define LINMAC "linux"
+#endif
+
+#ifdef _WIN32
+#define EXPORT __declspec(dllexport)
+#define WINMAC "windows"
+#else
+#define EXPORT
+#endif
+
 //
 //#endif
 //
+
+#define MACROINT 42
+
 enum Enum1
 {
 	ZERO,
 	ONE,
-	TWO = 4,
+	TWO = MACROINT,
 };
 
 typedef enum Enum2
 {
-	THREE = 3,
-	FOUR,
+	THREE = -1,
+	FOUR = 4,
 	FIVE,
 } TEnum2;
 
 
-#define MACROINT 42
 #define MACROSTR "stringmacro"
 #define MACROFUNC(x) (x+1)
 
@@ -51,7 +59,7 @@ struct Struct1
 {
 	const char* key;
 	struct NameS* next;
-	int arr[MACRO];
+	int arr[MACROINT]; 
 	UnknownType field;
 	size_t xy;
 	uint16_t ij;
@@ -66,7 +74,7 @@ typedef struct Struct2
 } TStruct2;
 
 
-void* function1(UnknownType* arg) 
+void* function1(UnknownType* arg, function callback) 
 {
 	return;
 }
