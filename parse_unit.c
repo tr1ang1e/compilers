@@ -148,7 +148,7 @@ enum CXChildVisitResult visitor_callback(CXCursor currentCursor, CXCursor parent
         CXTranslationUnit unit = ((ClientData*)clangData)->unit;    // deserialize argument given by caller
         cursorData = generate_cursor_data(currentCursor, unit);
 
-        // handle cursor = use commond data and cursor itself
+        // handle cursor = use common data and cursor itself
         cursorData.kind.handler(currentCursor, cursorData);
 
         switch (category.category)
@@ -157,7 +157,7 @@ enum CXChildVisitResult visitor_callback(CXCursor currentCursor, CXCursor parent
                 break;
 
             case CURSOR_CHILD_E:
-                visitResult = CXChildVisit_Continue;   // guarantees visiting only children without thier children
+                visitResult = CXChildVisit_Continue;   // guarantees visiting only children without their children
                 break;
 
             default: break;
@@ -345,6 +345,7 @@ void print_lists()
         printf("\n");
     }
 }
+
 
 /*--------------------------------------------------------------*
  *                          STATIC                              *

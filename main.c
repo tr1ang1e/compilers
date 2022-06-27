@@ -42,7 +42,7 @@ int main(int argc, char** argv)
         "-I./examples/include",          
         "-D__linux__",
         "-U_WIN32",
-        // additional = `clang -prent-targets` , clang.llvm.org/docs/CrossCompilation.html
+        // additional = `clang -print-targets` , clang.llvm.org/docs/CrossCompilation.html
     };   
     
     int argsNumber = ARRAY_SIZE(argsList);                  
@@ -67,12 +67,10 @@ int main(int argc, char** argv)
 
     if (!unit)
     {
-        _TRACE_("CXTranslationUnit, fail");
+        _TRACE_("CXTranslationUnit, fail \n");
     }
     else
     {
-        _TRACE_("CXTranslationUnit, success");
-
         // prepare client data
         ClientData cData = { unit };
         CXClientData clangData = (CXClientData)&cData;
