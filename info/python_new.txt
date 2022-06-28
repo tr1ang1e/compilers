@@ -1,0 +1,22 @@
+
+# ---------------------------------------------------------------------- #
+#                                 BASE                                   #
+# ---------------------------------------------------------------------- #
+
+
+yield = return generator element
+
+
+iter(obj) = return iterator, might be used with next(iterator) of in standard loop (for i in iterator: ...)
+
+
+# ---------------------------------------------------------------------- #
+#                                CLASSES                                 #
+# ---------------------------------------------------------------------- #
+
+
+@property = variable like function
+
+
+@classmethod = method for use with temp class object (e.g. S.method()), uses 'cls' keyword
+               class probably should be explicitle imported (from ... import ...)

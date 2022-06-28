@@ -1,0 +1,4 @@
+Get list of default flags:
+	$ clang -c test.c -v     (compilation would be done) 
+	$ clang -### test.c      (without running real compile process)
+Might be used to find out paths for preprocessor to search include headers
