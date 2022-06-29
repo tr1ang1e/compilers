@@ -59,7 +59,8 @@ struct Struct1
 {
 	const char* key;
 	struct NameS* next;
-	int arr[MACROINT]; 
+	struct Header2Struct header2;
+	int arr[INITIALIZE];
 	UnknownType field;
 	size_t xy;
 	uint16_t ij;

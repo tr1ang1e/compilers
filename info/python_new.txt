@@ -20,3 +20,6 @@ iter(obj) = return iterator, might be used with next(iterator) of in standard lo
 
 @classmethod = method for use with temp class object (e.g. S.method()), uses 'cls' keyword
                class probably should be explicitle imported (from ... import ...)
+
+@staticmethod = method like a classmethod but wothout 'cls' or 'self' keywords
+                class like a namespace for a usual function

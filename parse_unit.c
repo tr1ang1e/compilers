@@ -84,7 +84,7 @@ void print_cursor_data(CursorData cursorData)
     char* type = get_string(cursorData.type);
     char* name = get_string(cursorData.name);
     char* file = get_string(cursorData.location.file);
-    printf("  %s %-24s %-22s %s:%u:%-10u     ",
+    printf("  %-24s %-24s %-22s %s:%u:%-10u     ",
         cursorData.kind.string, 
         type, name,
         file, cursorData.location.line, cursorData.location.column
@@ -93,13 +93,16 @@ void print_cursor_data(CursorData cursorData)
     free(name);
     free(file);
 
-    // tokens
-    for (unsigned token = 0; token < cursorData.tokens.tokensNumber; ++token)
-    {
-        CXString tokenSpelling = clang_getTokenSpelling(cursorData.unit, cursorData.tokens.tokensArray[token]);
-        printf(":%s ", clang_getCString(tokenSpelling));
-        clang_disposeString(tokenSpelling);
-    }
+    /* uncomment to see cursor tokens in debug output
+        // tokens
+        for (unsigned token = 0; token < cursorData.tokens.tokensNumber; ++token)
+        {
+            CXString tokenSpelling = clang_getTokenSpelling(cursorData.unit, cursorData.tokens.tokensArray[token]);
+            printf(":%s ", clang_getCString(tokenSpelling));
+            clang_disposeString(tokenSpelling);
+        }
+    */
+
     printf("\n");
 }
 
@@ -164,7 +167,7 @@ enum CXChildVisitResult visitor_callback(CXCursor currentCursor, CXCursor parent
         }
         
         // debug
-        // print_cursor_data(cursorData);
+        print_cursor_data(cursorData);
 
         // common data = dispose resources
         dispose_cursor_data(cursorData);
@@ -379,7 +382,8 @@ void cursor_handler_struct(CXCursor cursor, CursorData cursorData)
     else 
     {
         // list is not empty but new instance is the same as the last. Do nothing
-        // occurs when typedef and type declaration are combined
+        // occurs when typedef and type declaration are combined. Might be fixed by 
+        // returninig "_Continue" when handle typedef in visitor callback function
     }
 
     // insert
@@ -416,7 +420,8 @@ void cursor_handler_enum(CXCursor cursor, CursorData cursorData)
     else
     {
         // list is not empty but new instance is the same as the last. Do nothing
-        // occurs when typedef and type declaration are combined
+        // occurs when typedef and type declaration are combined. Might be fixed by 
+        // returninig "_Continue" when handle typedef in visitor callback function
     }
 
     // insert
@@ -436,7 +441,7 @@ void cursor_handler_field(CXCursor cursor, CursorData cursorData)
     ListNode* structDeclaration = get_last_node(structures);
     StructType* structInstance = GET_NODE(structDeclaration, StructType, next);
 
-    FieldType* newInstance = NULL;                              // new instance
+    FieldType* newInstance = NULL;                                // new instance
     ListNode* last = get_last_node(structInstance->fields);       // node of the last instance
 
     // debug

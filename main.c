@@ -1,16 +1,16 @@
 #include "parse_unit.h"
 
+
 /* NOTES
  * 
- * libclang errors might appear in execution process, e.g.: 
- * "variable has incomplete type" and like this. It's OK and
- * made in purpose of parcing only given files without
- * managing both system and users header files.
  *
  * */
 
+
 // TBD: add list of units to be parsed
 // TBD: reimplement contatiners from separate variables to iterable array
+// TBD: remove checking if struct or enum already exists (fixed by typedef replacement from child kinds to parent)
+// TBD: handle fields and enum constants in struct and fields handlers (possibility to handle incomlete types) 
 
 
 /*--------------------------------------------------------------*
@@ -39,7 +39,7 @@ int main(int argc, char** argv)
 
     const char* argsList[] =  // https://gcc.gnu.org/onlinedocs/gcc/Preprocessor-Options.html
     { 
-        "-I./examples/include",          
+        "-I./examples/include", //  "-I./examples/include/include2",
         "-D__linux__",
         "-U_WIN32",
         // additional = `clang -print-targets` , clang.llvm.org/docs/CrossCompilation.html

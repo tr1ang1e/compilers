@@ -1,7 +1,7 @@
-#ifnde HEADER2
+#ifndef HEADER2
 #define HEADER2
 
-
+/*
 #ifdef __linux__
 #define MACROINT 0
 #else
@@ -13,8 +13,13 @@
 #else
 #define MACROSTR "linux"
 #endif
+*/
 
-int justForCheckThatFileParsed;
+typedef struct Header2Struct
+{
+	void* justForCheckThatFileParsed;
+} Header2;
+
 
 
 #endif

@@ -3,6 +3,8 @@
 
 #include "header2.h"
 
+#define INITIALIZE 123
+
 typedef char** UnknownType;
 
 struct NameS
