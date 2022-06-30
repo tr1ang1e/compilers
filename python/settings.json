@@ -1,0 +1,23 @@
+{
+  "files": [
+    "../examples/unit.c",
+    "../examples/empty.c",
+    "../examples/include/header.h",
+    "../main.c",
+    "../parse_unit.h"
+  ],
+
+  "-Ipaths": [
+    "../examples/include/",
+    "../examples/include/include2/",
+    "C:/Program Files/LLVM/include/",
+    "../"
+  ],
+
+  "preprocessor": [
+    "-D__linux__",
+    "-U_WIN32"
+  ],
+
+  "output": "wrapper.py"
+}

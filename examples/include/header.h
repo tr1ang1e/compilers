@@ -7,10 +7,10 @@
 
 typedef char** UnknownType;
 
-struct NameS
+typedef struct NameS
 {
 	int field;
-};
+} Name;
 
 
 #endif // _HEADER

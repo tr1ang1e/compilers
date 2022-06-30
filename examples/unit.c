@@ -58,7 +58,7 @@ typedef enum Enum2
 struct Struct1
 {
 	const char* key;
-	struct NameS* next;
+	Name* next;
 	struct Header2Struct header2;
 	int arr[INITIALIZE];
 	UnknownType field;
