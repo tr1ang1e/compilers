@@ -54,19 +54,32 @@ typedef enum Enum2
 #define MACROSTR "stringmacro"
 #define MACROFUNC(x) (x+1)
 
+int funct_delaration(int);
+
+struct TEST
+{
+	uint8_t u8t;
+};
 
 struct Struct1
 {
-	const char* key;
+	void voidnoptr;
+	void* voidptr;
+	void** voiddoubleptr;
+
+	uint8_t u8t;
+
+	const char** keys;
 	Name* next;
 	struct Header2Struct header2;
 	int arr[INITIALIZE];
+	int* inarr[111];
 	UnknownType field;
 	size_t xy;
 	uint16_t ij;
 };
 
-typedef void(*function)(UnknownType*);
+typedef void(*function)(UnknownType*, int**, char);
 
 typedef struct Struct2
 {

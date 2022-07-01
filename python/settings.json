@@ -1,17 +1,12 @@
 {
   "files": [
-    "../examples/unit.c",
-    "../examples/empty.c",
     "../examples/include/header.h",
-    "../main.c",
-    "../parse_unit.h"
+    "../examples/unit.c"
   ],
 
   "-Ipaths": [
     "../examples/include/",
-    "../examples/include/include2/",
-    "C:/Program Files/LLVM/include/",
-    "../"
+    "../examples/include/include2/"
   ],
 
   "preprocessor": [
