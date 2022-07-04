@@ -55,7 +55,7 @@ class struct_Struct1(Structure):
 		("next", POINTER(Name)),
 		("header2", c_void_p),
 		("arr", c_int32 * 123),
-		("inarr", POINTER(c_int32) * 111),
+		("inarr", POINTER(POINTER(c_int32)) * 111),
 		("field", UnknownType),
 		("xy", c_size_t),
 		("ij", c_uint16)]

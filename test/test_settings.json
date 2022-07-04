@@ -1,0 +1,16 @@
+{
+  "files": [
+    "../test/source.c"
+  ],
+
+  "-Ipaths": [
+    "../test/include/"
+  ],
+
+  "preprocessor": [
+    "-D__linux__",
+    "-U_WIN32"
+  ],
+
+  "output": "test_wrapper.py"
+}

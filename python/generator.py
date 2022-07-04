@@ -21,6 +21,7 @@
 # TBD: add context class to keep common information
 
 
+import argparse
 import json
 import clang.cindex as cl
 from clang.cindex import TranslationUnit
@@ -44,7 +45,9 @@ enums = {}					# "name"   :  {"name" :  int  }
 macros = {}					# "name"   :  "value"
 functions = {}				# ("name", "type")  :  {"name" : "type"}
 typedefs = {}				# "alias"  :  "underlying"
-typedefsAliases = []
+
+typedefsAliases = []	    # keep till end for the case when typedef in one file, but is used in another
+typedefsUnderlyings = []    # keep for the case when there is typedef but type is used by canonic name
 
 
 # cursor kinds will be handled
@@ -68,17 +71,28 @@ typesMapping = {
 	"void"                :   "c_void_p",
 	"bool"                :   "c_bool",
 	"char"                :   "c_char",
+	"size_t"              :   "c_size_t",
+	
 	"unsigned char"       :   "c_uint8",
 	"uint8_t"             :   "c_uint8",
 	"unsigned short"      :   "c_uint16",
 	"uint16_t"            :   "c_uint16",
 	"unsigned int"        :   "c_uint32",
 	"uint32_t"            :   "c_uint32",
-	"int"                 :   "c_int32",
-	"int32_t"             :   "c_int32",
-	"size_t"              :   "c_size_t",
     "unsigned long long"  :   "c_uint64",
-	"uint64_t"            :   "c_uint64"
+	"uint64_t"            :   "c_uint64",
+	
+	"signed char"         :   "c_int8",
+	"int8_t"              :   "c_int8",
+	"short"               :   "c_int16",
+	"signed short"        :   "c_int16",
+	"int16_t"             :   "c_int16",
+	"int"                 :   "c_int32",
+	"signed int"          :   "c_int32",
+	"int32_t"             :   "c_int32",
+	"long long"           :   "c_int64",
+	"signed long_long"    :   "c_int64",
+	"int64_t"             :   "c_int64",
 	
 	# hide types implementation
 	# 
@@ -173,8 +187,15 @@ def print_containers():
 # ---------------------------------------------------------------------- #
 
 
-def get_settings():
-	settingsFile = open("settings.json", mode="r")
+def get_args():
+	parser = argparse.ArgumentParser()
+	parser.add_argument('-s', '--settings', dest="settpath", type=str, default = './settings.json', help="path to settings file")
+	args = parser.parse_args()
+	return args
+
+
+def get_settings(settpath):
+	settingsFile = open(settpath, mode="r")
 	settingsDict = json.load(settingsFile)
 	settings = []	
 
@@ -182,15 +203,15 @@ def get_settings():
 	settings.append(settingsDict["files"])			
 	
 	# arguments 
-	args = []
-	args.extend(settingsDict["preprocessor"])	
+	compileArgs = []
+	compileArgs.extend(settingsDict["preprocessor"])	
 
 	includePaths = settingsDict["-Ipaths"]
 	for path in range(len(includePaths)):
 		includePaths[path] = add_prefix(includePaths[path], "-I")
-	args.extend(includePaths)
+	compileArgs.extend(includePaths)
 	
-	settings.append(args)
+	settings.append(compileArgs)
 
 	# file to write to
 	settings.append(settingsDict["output"])
@@ -238,16 +259,32 @@ def get_ctype(sourceType):
 	ctype = ""
 
 	# debug
-	# print("  :: sourceType = {}".format(temp))
+	print("  :: sourceType = {}".format(temp))
 	# print(typedefs.keys())
 
 	sourceType = sourceType.replace("const ", "")
+	sourceType = sourceType.replace("volatile ", "")
+	sourceType = sourceType.replace("restrict", "")
+
 	depth, sourceType = is_pointer(sourceType)
 	value, sourceType = is_array(sourceType)
 
-	if sourceType in structures.keys() or sourceType in enums.keys() or sourceType in typedefsAliases or sourceType in typesMapping.keys():
+
+	# if 'enum ' in type, replace with c_int
+
+	if sourceType in structures.keys() or sourceType.replace("struct ", "struct_") in structures.keys() or \
+	   sourceType in enums.keys() or          \
+	   sourceType in typedefsAliases or       \
+	   sourceType in typesMapping.keys():
 		
 		if sourceType in typesMapping.keys(): ctype = typesMapping[sourceType]
+
+		# elif sourceType in enums.keys(): pass
+
+		# elif sourceType in typedefsAliases: pass
+
+		# elif sourceType in typesMapping.keys(): pass
+
 		else: ctype = sourceType
 
 		# apply pointer
@@ -265,7 +302,7 @@ def get_ctype(sourceType):
 			ctype = ctype + " * " + value
 
 	else:
-		print("  Warning! unknown type detected = {}. Type would be replaced with c_void_p".format(temp))
+		print("  Warning! Type '{}' is defined in file which data were parsed but were not generated. Type would be replaced with 'c_void_p'".format(temp))
 		ctype = "c_void_p"
 
 	return ctype
@@ -309,7 +346,7 @@ def hanlde_typedefs():
 
 def parse_field(cursor):
 	name = cursor.displayname
-	#canonType = cursor.type.get_canonical().spelling
+	# canonType = cursor.type.get_canonical().spelling
 	# return {name : canonType}
 	sourceType = cursor.type.spelling
 	return {name : sourceType}
@@ -321,8 +358,9 @@ def parse_structure(cursor):
 	fields = {}
 	for field in cursor.get_children():
 		if is_appropriate_kind(field):
-			# raise ChildError("Unexpected field kind")
-			print("  Warning! parse_structure(), unexpected field kind. Probably type definition is in header that couldn't be parsed. Check '-Ipaths' list in .json setting file")
+			print("  Error. parse_structure(), unexpected field kind, name = {}. Generation stopped".format(field.displayname))
+			print("  Probably type definition is in header that couldn't be found. Check '-Ipaths' list in .json setting file")
+			raise Exception()
 		# debug
 		# print_cursor_info(field)
 		fields.update(parse_field(field))
@@ -546,8 +584,10 @@ def generate_code(wrapper, currentFile):
 
 def main():
 	
+	args = get_args() 
+
 	# shared context for all files will be parsed
-	parseFiles, parseArgs, outputFile = get_settings()
+	parseFiles, parseArgs, outputFile = get_settings(args.settpath)
 	parseOpts = TranslationUnit.PARSE_DETAILED_PROCESSING_RECORD | TranslationUnit.PARSE_SKIP_FUNCTION_BODIES
 	index = cl.Index.create()	
 	
@@ -555,14 +595,16 @@ def main():
 	wrapper = open(outputFile, mode="w")
 	generate_header(wrapper)
 
-	try:	
-		for currentFile in parseFiles:
-			parse_file(index, currentFile, parseArgs, parseOpts)
-			generate_code(wrapper, currentFile)	
-		# debug
-		# print_containers()
-	except Exception as exception:
-		print(exception)
+	# try:	
+
+	for currentFile in parseFiles:
+		parse_file(index, currentFile, parseArgs, parseOpts)
+		generate_code(wrapper, currentFile)	
+	# debug
+	# print_containers()
+
+	# except Exception as exception:
+		# print(exception)
 
 	# put all functions together
 	generate_functions(wrapper)
