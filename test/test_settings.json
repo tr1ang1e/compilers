@@ -12,5 +12,5 @@
     "-U_WIN32"
   ],
 
-  "output": "test_wrapper.py"
+  "output": "../test/test_wrapper.py"
 }

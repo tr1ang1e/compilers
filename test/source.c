@@ -12,15 +12,15 @@
 
 // correct parsing for Linux target machine
 #ifdef __linux__
-	#define LINMAC "linux"
+#define LINMAC "linux"
 #endif
 
 
 // correct parsing for not-Windows target machine
 #ifdef _WIN32
-	#define WINMAC "windows"
+#define WINMAC "windows"
 #else
-	#define NOTWINMAC "notwin"
+#define NOTWINMAC "notwin"
 #endif
 
 
@@ -52,21 +52,21 @@ typedef enum EnumTypedefUnderlying
 } EnumTypedefAlias;
 
 
-// struct, combine with typedef
+// struct
+struct StructNotTypedef
+{
+	void* structField;
+};
+
+// struct combined with typedef
 typedef struct StructTypedefUnderlying
 {
 	void* structField;
 } StructTypedefAlias;
 
 
-struct XXX
-{
-	int i;
-};
-
-
-// struct, struct fields
-struct StructNotTypedef
+// struct fields
+struct StructFields
 {
 	// void
 	void void_nop;
@@ -92,18 +92,22 @@ struct StructNotTypedef
 	volatile int without_v;
 	const volatile int without_cv;
 
-	// users types
+	// enums
+	enum EnumNotTypedef enum_notypedef;
+	enum EnumTypedefUnderlying enum_underlying;
+	EnumTypedefAlias enum_alias;
 
-	struct XXX xxx;
+	// structs
+	struct StructNotTypedef struct_notypedef;
+	struct StructTypedefUnderlying struct_underlying;
+	StructTypedefAlias struct_alias;
+	struct StructFields* struct_itself_p;
+	struct StructFields** struct_itself_pp;
 
-	struct StructTypedefUnderlying struct_notypedef;
-	StructTypedefAlias struct_typedef;
-
-	enum EnumTypedefUnderlying enum_notypedef;
-	EnumTypedefAlias enum_typedef;
-	
-	headerStruct struct_nogeneratedHeader;
-	// struct unknownType struct_noexist;  // should cause error
+	// types from header
+	struct headerStructS struct_header_underlying;		// alias if header generated, c_void_p if header only parsed
+	headerStruct struct_header_alias;					// alias if header generated, c_void_p if header only parsed
+	// struct unknownType struct_noexist;				// should cause error anyway because no such a type
 };
 
 

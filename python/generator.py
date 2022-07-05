@@ -1,5 +1,7 @@
+
 # module = https://pypi.org/project/libclang/
 # llvm source = https://github.com/llvm/llvm-project/tree/main/clang/bindings/python
+# understanding AST = https://jonasdevlieghere.com/understanding-the-clang-ast/
 
 # json info
 # https://docs.python.org/3/library/json.html
@@ -7,18 +9,10 @@
 # https://stackoverflow.com/questions/3768895/how-to-make-a-class-json-serializable
 
 
-# +------ THEORY ------+
-# TBD: try: for ... = status of parseFile local variable
-# TBD: if variable inside 'if' might it be used after
-# TBD: how to do function static
-# TBD: handle different types of exceptions
-
-
 # +------ IMPLEM ------+
-# TBD: add callback logic for cursor kinds handlers
-# TBD: how to parse types: canonical or original (typedefs)
+# TBD: implement OOP logic
+# TBD: split into modules
 # TBD: add custom exception  // https://habr.com/ru/company/piter/blog/537642/
-# TBD: add context class to keep common information
 
 
 import argparse
@@ -46,9 +40,8 @@ macros = {}					# "name"   :  "value"
 functions = {}				# ("name", "type")  :  {"name" : "type"}
 typedefs = {}				# "alias"  :  "underlying"
 
-typedefsAliases = []	    # keep till end for the case when typedef in one file, but is used in another
-typedefsUnderlyings = []    # keep for the case when there is typedef but type is used by canonic name
-
+typedefsAliases = []	    # keep till the end for the case when typedef is declared in parsed and (!) generated file, but is used in another
+typedefsReplaced = {}       # keep underlying types for the case when they are used despite of typedef aliases
 
 # cursor kinds will be handled
 cursorKinds = {
@@ -257,52 +250,60 @@ def is_array(string):
 def get_ctype(sourceType):
 	temp = sourceType
 	ctype = ""
+	knownType = False
 
 	# debug
-	print("  :: sourceType = {}".format(temp))
-	# print(typedefs.keys())
+	# print("  :: sourceType = {}".format(temp))
+	# print(typedefsAliases)
+	# print(typedefsReplaced.keys())
 
+	# qualifiers are not allowed in python wrapper
 	sourceType = sourceType.replace("const ", "")
 	sourceType = sourceType.replace("volatile ", "")
 	sourceType = sourceType.replace("restrict", "")
 
-	depth, sourceType = is_pointer(sourceType)
-	value, sourceType = is_array(sourceType)
+	# get and remove pointer and array info from type
+	ptrDepth, sourceType = is_pointer(sourceType)
+	arrSize, sourceType = is_array(sourceType)
 
+	if sourceType.find('enum ') != -1:  # enum without typedef
+		ctype = "c_int"
+		knownType = True
 
-	# if 'enum ' in type, replace with c_int
+	if sourceType in typedefsReplaced.keys():  # full enum type even if typedef was declared
+		ctype = typedefsReplaced[sourceType]
+		knownType = True
 
-	if sourceType in structures.keys() or sourceType.replace("struct ", "struct_") in structures.keys() or \
-	   sourceType in enums.keys() or          \
-	   sourceType in typedefsAliases or       \
-	   sourceType in typesMapping.keys():
-		
-		if sourceType in typesMapping.keys(): ctype = typesMapping[sourceType]
+	if sourceType in structures.keys():  # structure typedef
+		ctype = sourceType
+		knownType = True
 
-		# elif sourceType in enums.keys(): pass
+	if sourceType.replace("struct ", "struct_") in structures.keys():  # struct without typedef
+		ctype = sourceType.replace("struct ", "struct_")
+		knownType = True
 
-		# elif sourceType in typedefsAliases: pass
+	if sourceType.replace("struct ", "struct_") in typedefsReplaced.keys():  # full sruct type even if typedef was declared
+		ctype = typedefsReplaced[sourceType.replace("struct ", "struct_")]
+		knownType = True
 
-		# elif sourceType in typesMapping.keys(): pass
+	if sourceType in typesMapping.keys():  # built-in or hidden types
+		ctype = typesMapping[sourceType]
+		knownType = True
 
-		else: ctype = sourceType
+	if sourceType in typedefsAliases:  # typedef was declared in file parsed and (!) generated before 
+		ctype = sourceType
+		knownType = True
 
-		# apply pointer
-		while depth:
-			if ctype == "c_char": 
-				ctype = "c_char_p"
-			elif (sourceType == "void") and (depth == 1): 
-				pass # both 'void' and 'void *' are mapped to c_void_p
-			else: 
-				ctype = "POINTER(" + ctype+ ")"
-			depth -= 1
+	if knownType:  # turn pointer and array info back
+		while ptrDepth:
+			if ctype == "c_char": ctype = "c_char_p"
+			elif (sourceType == "void") and (ptrDepth == 1): pass # both 'void' and 'void *' are mapped to c_void_p
+			else: ctype = "POINTER(" + ctype+ ")"
+			ptrDepth -= 1
+		if arrSize: ctype = ctype + " * " + arrSize
 
-		# apply array
-		if value:
-			ctype = ctype + " * " + value
-
-	else:
-		print("  Warning! Type '{}' is defined in file which data were parsed but were not generated. Type would be replaced with 'c_void_p'".format(temp))
+	else:  # type was declared in file parsed but (!) not generated before
+		print("  Warning! Type '{}' is defined in file which was #include'd, parsed but were not generated. Replaced with 'c_void_p'".format(temp))
 		ctype = "c_void_p"
 
 	return ctype
@@ -319,14 +320,16 @@ def hanlde_typedefs():
 			enums.pop(underlying)
 			enums[alias] = constants
 			typedefs[alias] = 'c_int # ' + underlying
+			typedefsReplaced[underlying] = alias  # if full type naming will appear
 		
 		elif underlying.replace("struct ", "struct_") in structures.keys():
 			key = underlying.replace("struct ", "struct_")
 			fields = structures[key]
 			structures.pop(key)
 			structures[alias] = fields
+			typedefsReplaced[key] = alias  # if full type naming will appear
 		
-		elif underlying.find('(') != -1:	# functions
+		elif underlying.find('(') != -1:
 			openBrace = underlying.find('(')
 			closeBrace = underlying.find(')')
 			funType = get_ctype(underlying[:openBrace:].strip(' '))
@@ -474,16 +477,24 @@ def generate_enums(wrapper):
 
 def generate_structs(wrapper):
 	global structures
-	for name, fields in structures.items():
-		wrapper.write("\nclass {}(Structure):\n".format(name))
-		wrapper.write("    _fields_ = [\n")
+	for structName, fields in structures.items():
+		wrapper.write("\nclass {}(Structure):\n".format(structName))
+		wrapper.write("    _fields_ = [")
 
 		fnames = list(fields.keys())
 		ftypes = list(fields.values())
-		fnumber = len(fnames) - 1  # convinient last field handling
+		fnumber = len(fnames) # convinient last field handling
+
 		for i in range(fnumber):
-			wrapper.write("\t\t(\"{}\", {}),\n".format(fnames[i], get_ctype(ftypes[i])))
-		wrapper.write("\t\t(\"{}\", {})]\n".format(fnames[fnumber], get_ctype(ftypes[fnumber])))
+			fieldType = get_ctype(ftypes[i])
+			
+			if fieldType.find(structName) != -1:
+				fieldType = fieldType.replace("POINTER({})".format(structName), "c_void_p")
+				wrapper.write("\n\t\t(\"{}\", {}), # pointer to this struct type".format(fnames[i], fieldType))		
+			else:
+				wrapper.write("\n\t\t(\"{}\", {}),".format(fnames[i], fieldType))
+		
+		wrapper.write("\n\t]\n")
 	
 	structures = {}
 
