@@ -1,3 +1,11 @@
+# llvm source = https://github.com/llvm/llvm-project/tree/main/clang/bindings/python
+# understanding AST = https://jonasdevlieghere.com/understanding-the-clang-ast/
+
+# json info
+# https://docs.python.org/3/library/json.html
+# https://www.geeksforgeeks.org/read-write-and-parse-json-using-python/
+# https://stackoverflow.com/questions/3768895/how-to-make-a-class-json-serializable
+
 # TODO: implement OOP logic
 # TODO: split into modules
 # TODO: exceptions
@@ -11,6 +19,7 @@ import clang.cindex as cl
 from clang.cindex import TranslationUnit
 from clang.cindex import CursorKind
 from clang.cindex import TokenGroup
+
 
 # ---------------------------------------------------------------------- #
 #                                GLOBAL                                  #
@@ -92,7 +101,7 @@ typesMapping = {
     "AppEventMsg":              "c_void_p",
     "FwLogOutputStream":        "c_void_p",
 
-    # hiding typed backward compatibility
+    # hiding types backward compatibility
 
     "SpiAdapter":               "c_void_p",
     "I2cAdapter":               "c_void_p",
