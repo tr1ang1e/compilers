@@ -1,3 +1,5 @@
+from context import Context
+
 import clang.cindex as cl
 from clang.cindex import TranslationUnit
 from clang.cindex import CursorKind
@@ -13,7 +15,8 @@ def parse():
 
 
 def main():
-    # initialize context
+    context = Context()
+    print(context._)
     # initialize containers
     # start parsing
     pass

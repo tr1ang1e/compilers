@@ -1,3 +1,4 @@
+import sys
 import argparse
 import json
 from clang.cindex import TranslationUnit
@@ -14,17 +15,19 @@ class Context:
     _generatorOptions = None
 
     # context itself
-    _parserIndex = None
+    _parserIndex = None     # common context for files would be parsed by clang
     _currentFile = None
 
-    def __init__(self):
+    def __init__(self, cli_args=None):
         self._parser = self.__class__.initialize_argument_parser()
-        self.get_cli_args()
+        self.parse_cli_args(cli_args)
         self.initialize_defaults()
         self._parserIndex = self.index
 
-    def get_cli_args(self):
-        args = self._parser.parse_args()
+    def parse_cli_args(self, cli_args=None):
+        if cli_args is None:
+            cli_args = sys.argv[1::]
+        args = self._parser.parse_args(cli_args)
         settings_file = open(args.jsonPath, mode="r")
         settings_dict = json.load(settings_file)
 

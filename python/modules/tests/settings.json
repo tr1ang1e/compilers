@@ -1,12 +1,13 @@
 {
-  "project": "../",
+  "project": ".",
 
   "files": [
-    "test/source.c"
+    "header.h",
+    "source.c"
   ],
 
   "-Ipaths": [
-    "test/include/"
+    "./include"
   ],
 
   "preprocessor": [
@@ -14,5 +15,5 @@
     "-U_WIN32"
   ],
 
-  "output": "test/test_wrapper.py"
+  "output": "test_wrapper.py"
 }
