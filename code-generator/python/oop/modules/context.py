@@ -10,19 +10,19 @@ class Context:
     # clang-c parser data
     _projectPath = None
     _parseFiles = None
-    _outputFile = None
     _clangArgs = None
-    _generatorOptions = None
+    _clangOptions = None
+    outputFile = None
 
     # context itself
     _parserIndex = None     # common context for files would be parsed by clang
-    _currentFile = None
+    _currentUnit = None
 
     def __init__(self, cli_args=None):
         self._parser = self.__class__.initialize_argument_parser()
         self.parse_cli_args(cli_args)
         self.initialize_defaults()
-        self._parserIndex = self.index
+        self._parserIndex = Index.create()
 
     def parse_cli_args(self, cli_args=None):
         if cli_args is None:
@@ -33,7 +33,7 @@ class Context:
 
         self._projectPath = settings_dict["project"]
         self._parseFiles = settings_dict["files"]
-        self._outputFile = settings_dict["output"]
+        self.outputFile = settings_dict["output"]
 
         self._clangArgs = []
         self._clangArgs.extend(settings_dict["preprocessor"])
@@ -41,19 +41,13 @@ class Context:
         settings_file.close()
 
     def initialize_defaults(self):
-        self._generatorOptions = TranslationUnit.PARSE_DETAILED_PROCESSING_RECORD | \
-                                 TranslationUnit.PARSE_SKIP_FUNCTION_BODIES
+        self._clangOptions = TranslationUnit.PARSE_DETAILED_PROCESSING_RECORD | \
+                            TranslationUnit.PARSE_SKIP_FUNCTION_BODIES
 
-    def get_next_file(self):
-        # use 'yield'
-        pass
-
-    @property
-    def index(self):
-        if self._parserIndex is None:
-            return Index.create()
-        else:
-            return self._parserIndex
+    def parse_next_file(self):
+        for next_file in self._parseFiles:
+            self._currentUnit = self._parserIndex.parse(next_file, args=self._clangArgs, options=self._clangOptions)
+            yield self._currentUnit
 
     @staticmethod
     def initialize_argument_parser():

@@ -15,5 +15,5 @@
     "-U_WIN32"
   ],
 
-  "output": "test_wrapper.py"
+  "output": "generated.py"
 }

@@ -43,19 +43,11 @@ typedefsAfter = {}  # keep typedefs which are pointers to complete usertype
 
 # cursor kinds will be handled
 cursorKinds = {
-
-    # need to handle their children (see handlers)
-    CursorKind.STRUCT_DECL:           "STRUCT_DECL",
-    CursorKind.ENUM_DECL:             "ENUM_DECL",
-
-    # handle without handling children
+    CursorKind.STRUCT_DECL:          "STRUCT_DECL",
+    CursorKind.ENUM_DECL:            "ENUM_DECL",
     CursorKind.MACRO_DEFINITION:     "MACRO_DEFINITION",
     CursorKind.FUNCTION_DECL:        "FUNCTION_DECL",
     CursorKind.TYPEDEF_DECL:         "TYPEDEF_DECL",
-
-    # debug
-    # CursorKind.ENUM_CONSTANT_DECL	: "ENUM_CONSTANT_DECL",
-    # CursorKind.FIELD_DECL			: "FIELD_DECL",
 }
 
 typesMapping = {

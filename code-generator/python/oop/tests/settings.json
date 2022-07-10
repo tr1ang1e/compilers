@@ -1,0 +1,19 @@
+{
+  "project": ".",
+
+  "files": [
+    "samples/include/header.h",
+    "samples/source.c"
+  ],
+
+  "-Ipaths": [
+    "./include"
+  ],
+
+  "preprocessor": [
+    "-D__linux__",
+    "-U_WIN32"
+  ],
+
+  "output": "generated.py"
+}
