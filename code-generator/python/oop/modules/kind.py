@@ -1,4 +1,4 @@
-from clang.cindex import CursorKind
+from clang.cindex import Cursor, CursorKind
 
 
 class Kind:
@@ -15,4 +15,13 @@ class Kind:
 
 
 class Type:
-    pass
+    cursor: Cursor = None
+    name: str = None
+    srcType: str = None
+    canonType: str = None
+
+    def __init__(self, cursor: Cursor):
+        self.cursor = cursor
+        self.name = cursor.displayname
+        self.srcType = cursor.type.spelling
+        self.canonType = cursor.type.get_canonical().spelling
