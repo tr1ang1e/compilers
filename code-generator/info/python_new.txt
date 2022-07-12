@@ -17,11 +17,30 @@ iter(obj) = return iterator, might be used with next(iterator) of in standard lo
 
 @property = decorator, property
 
-
 @classmethod = method for use with temp class object (e.g. S.method()), uses 'cls' keyword
                class probably should be explicitle imported (from ... import ...)
 
 @staticmethod = method like a classmethod but wothout 'cls' or 'self' keywords
                 class like a namespace for a usual function
 
-magic methods = ... 
+magic methods = ...
+
+@decorator = call function inside another function
+
+
+
+# ---------------------------------------------------------------------- #
+#                             REQUIREMENTS                               #
+# ---------------------------------------------------------------------- #
+
+https://learnpython.com/blog/python-requirements-file/
+create requirements file:
+    go to project root folder
+    exec: pip freeze > requirements.txt  // name is necessary
+install requirements:
+    go to folder with requirements.txt
+    exec: pip install -r requirements.txt
+update packages:
+    see outdated: pip list --outdated + pip install -U <outdated_package>
+    or for all: pip install -U -r requirements.txt
+    then exec: pip freeze > requirements.txt  // maintaining requirements.txt file
