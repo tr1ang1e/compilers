@@ -5,7 +5,7 @@ from clang.cindex import TranslationUnit
 from clang.cindex import Index
 
 
-class Context:
+class Parser:
 
     # clang-c parser data
     _projectPath = None
@@ -16,10 +16,10 @@ class Context:
 
     # context itself
     _parserIndex = None     # common context for files would be parsed by clang
-    _currentUnit = None
+    currentUnit = None
 
     def __init__(self, cli_args=None):
-        self._parser = self.__class__.initialize_argument_parser()
+        self._settings_parser = self.__class__.initialize_argument_parser()
         self.parse_cli_args(cli_args)
         self.initialize_defaults()
         self._parserIndex = Index.create()
@@ -27,7 +27,7 @@ class Context:
     def parse_cli_args(self, cli_args=None):
         if cli_args is None:
             cli_args = sys.argv[1::]
-        args = self._parser.parse_args(cli_args)
+        args = self._settings_parser.parse_args(cli_args)
         settings_file = open(args.jsonPath, mode="r")
         settings_dict = json.load(settings_file)
 
@@ -42,12 +42,12 @@ class Context:
 
     def initialize_defaults(self):
         self._clangOptions = TranslationUnit.PARSE_DETAILED_PROCESSING_RECORD | \
-                            TranslationUnit.PARSE_SKIP_FUNCTION_BODIES
+                             TranslationUnit.PARSE_SKIP_FUNCTION_BODIES
 
     def parse_next_file(self):
         for next_file in self._parseFiles:
-            self._currentUnit = self._parserIndex.parse(next_file, args=self._clangArgs, options=self._clangOptions)
-            yield self._currentUnit
+            self.currentUnit = self._parserIndex.parse(next_file, args=self._clangArgs, options=self._clangOptions)
+            yield self.currentUnit
 
     @staticmethod
     def initialize_argument_parser():
