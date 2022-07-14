@@ -7,7 +7,7 @@
   ],
 
   "-Ipaths": [
-    "./include"
+    "/samples/include"
   ],
 
   "preprocessor": [

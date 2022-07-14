@@ -37,7 +37,7 @@ class Parser:
 
         self._clangArgs = []
         self._clangArgs.extend(settings_dict["preprocessor"])
-        self._clangArgs.extend(list(map(lambda path: "-I" + path, settings_dict["-Ipaths"])))
+        self._clangArgs.extend(list(map(lambda path: "-I" + self._projectPath + path, settings_dict["-Ipaths"])))
         settings_file.close()
 
     def initialize_defaults(self):

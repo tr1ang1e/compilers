@@ -22,6 +22,7 @@ class CommonTypeData:
     def __init__(self, cursor, unit):
         self.cursor = cursor
         self.file = unit.spelling
+        self.pointer_info
 
     def handle(self):
         raise NotImplementedError
@@ -33,6 +34,9 @@ class CommonTypeData:
         pass
 
     def manage_array(self):
+        pass
+
+    def get_ctype(self):
         pass
 
 

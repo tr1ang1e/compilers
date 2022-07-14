@@ -9,7 +9,7 @@ sys.path.append('../modules')
 import pytest
 from generator import is_appropriate
 from modules.parser import Parser
-from modules.kinds import Type
+from modules.kinds import Type, Typedef
 from clang.cindex import CursorKind
 
 
@@ -40,20 +40,43 @@ def test_parser_parse_next(create_parser):
     assert parsed_files == parser._parseFiles
 
 
-def visitor(parent, parser, writer, container):
+def visitor_traverse_ast(parent, parser, writer, container):
     for cursor in parent.get_children():
         if is_appropriate(cursor, parser.currentUnit.spelling, [CursorKind.MACRO_DEFINITION]):
             type_instance = Type().get_instance(cursor, parser.currentUnit)
             assert type_instance.__class__.__name__ == "Macro"
             container.append(type_instance.cursor.displayname)
-        visitor(cursor, parser, None, container)
+        visitor_traverse_ast(cursor, parser, None, container)
 
 
 def test_traverse_ast(create_parser):
     parser = create_parser
     container = []
     for translation_unit in parser.parse_next_file():
-        visitor(translation_unit.cursor, parser, None, container)
+        visitor_traverse_ast(translation_unit.cursor, parser, None, container)
     assert "SOURCE_DEFINE_test" in container
     assert "HEADER_DEFINE_test" in container
     assert "SKIP_DEFINE_test" not in container
+
+
+def visitor_typedef_parsing_iteration(parent, parser, writer, container):
+    for cursor in parent.get_children():
+        if is_appropriate(cursor, parser.currentUnit.spelling, [CursorKind.TYPEDEF_DECL]):
+            type_instance = Type().get_instance(cursor, parser.currentUnit)
+            assert type_instance.__class__.__name__ == "Typedef"
+            type_instance.handle()
+            container.append((type_instance.alias, type_instance.underlying))
+        visitor_typedef_parsing_iteration(cursor, parser, None, container)
+
+
+def test_typedef_parsing_iteration(create_parser):
+    parser = create_parser
+    container = []
+    for translation_unit in parser.parse_next_file():
+        visitor_typedef_parsing_iteration(translation_unit.cursor, parser, None, container)
+    assert ("Typedef_IncompleteStruct_test", "struct IncompleteStruct_test") in container
+    assert ("u8_test", "uint8_t") in container
+    assert ("bool_test", "bool") in container
+    assert ("another_bool_test", "bool") in container
+    assert len(Typedef._aliases) == 4           # aliases have unique names
+    assert len(Typedef._underlyings) == 3       # one type might have different aliases
