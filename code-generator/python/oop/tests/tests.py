@@ -103,16 +103,25 @@ def test_manage_arrays():
 
 
 def test_get_base_type():
-    assert CommonTypeData.get_base_type('int ') == ('int', [], 0)
-    assert CommonTypeData.get_base_type('int* const') == ('int', [], 1)
-    assert CommonTypeData.get_base_type('volatile const int*[][1] ') == ('int', [1], 2)
-    assert CommonTypeData.get_base_type('const int[3][2] ') == ('int', [3, 2], 0)
-    assert CommonTypeData.get_base_type('volatile const int* restrict * const[][1][2] ') == ('int', [1, 2], 3)
+    assert CommonTypeData.get_base_type('int ') == ('int', 0, [])
+    assert CommonTypeData.get_base_type('volatile const int*[][1] ') == ('int', 2, [1])
+    assert CommonTypeData.get_base_type('int* const') == ('int', 1, [])
+    assert CommonTypeData.get_base_type('const int* [1][2] ') == ('int', 1, [1, 2])
+    assert CommonTypeData.get_base_type('const int[3][2] ') == ('int', 0, [3, 2])
+    assert CommonTypeData.get_base_type('volatile const int* restrict * const[][1][2] ') == ('int', 3, [1, 2])
 
 
-# TODO: CommonTypeData.get_ctype()
 def test_get_ctype():
-    pass
+    assert CommonTypeData.get_ctype('uint8_t') == 'c_uint8'
+    assert CommonTypeData.get_ctype('void') == 'c_void_p'
+    assert CommonTypeData.get_ctype('void*') == 'c_void_p'
+    assert CommonTypeData.get_ctype('void**') == 'POINTER(c_void_p)'
+    assert CommonTypeData.get_ctype('const int* [4][4]') == 'POINTER(c_int32) * 4 * 4'
+    assert CommonTypeData.get_ctype('unsigned int**') == 'POINTER(POINTER(c_uint32))'
+    assert CommonTypeData.get_ctype('bool*[4]') == 'POINTER(c_bool) * 4'
+
+
+
 
 
 def visitor_debug(parent, parser):

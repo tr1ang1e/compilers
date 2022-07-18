@@ -1,4 +1,4 @@
-from modules.kinds import Type
+from modules.kinds import Kinds, Type
 from modules.parser import Parser
 from modules.writer import Writer
 from clang.cindex import CursorKind
@@ -37,10 +37,7 @@ def main():
     traverse_ast(parser, writer, [CursorKind.TYPEDEF_DECL])
 
     print(" :: Processing macros, user types and functions ")
-    traverse_ast(parser, writer, [CursorKind.MACRO_DEFINITION,
-                                  CursorKind.ENUM_DECL,
-                                  CursorKind.STRUCT_DECL,
-                                  CursorKind.FUNCTION_DECL])
+    traverse_ast(parser, writer, [kind for kind in Kinds.cursorKinds.keys() if kind != CursorKind.TYPEDEF_DECL])
 
     writer.generate_output(parser.outputFile)
 

@@ -1,4 +1,4 @@
-from clang.cindex import Cursor, CursorKind, TranslationUnit
+from clang.cindex import CursorKind
 from debug import print_cursor_info
 
 # self.name = cursor.displayname
@@ -11,6 +11,7 @@ typesMapping = {
     # built-in types
 
     "void":                     "c_void_p",
+    "bool":                     "c_bool",
     "_Bool":                    "c_bool",
     "char":                     "c_char",
     "size_t":                   "c_size_t",
@@ -42,10 +43,6 @@ typesMapping = {
 }
 
 
-
-
-
-
 class Kinds:
 
     cursorKinds = {
@@ -74,12 +71,19 @@ class CommonTypeData:
         ctype = Typedef.get_alias(base_type)
         if ctype is None:
             ctype = typesMapping[base_type]
+
+            # both 'void' and 'void*' types should be mapped to 'c_void_p'
+            if base_type == 'void' and pointers_count > 0:
+                pointers_count -= 1
+
         # apply pointers
         for i in range(pointers_count):
             ctype = "POINTER(" + ctype + ")"
+
         # apply arrays
         for size in array_sizes:
             ctype = ctype + " * {}".format(size)
+
         return ctype
 
     @staticmethod
@@ -88,14 +92,14 @@ class CommonTypeData:
         base_type, pointers_count = CommonTypeData.manage_pointers(base_type)
         base_type, array_sizes, pointer = CommonTypeData.manage_arrays(base_type)
         pointers_count += pointer
-        return base_type, pointers_count, array_sizes
+        return base_type.strip(' '), pointers_count, array_sizes
 
     @staticmethod
     def manage_qualifiers(input_type):
         result_type = input_type.replace('const ', '').replace(' const', '')
         result_type = result_type.replace('restrict', '')
         result_type = result_type.replace('volatile', '')
-        return result_type.strip(' ')
+        return result_type.strip()
 
     @staticmethod
     def manage_pointers(input_type):
