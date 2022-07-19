@@ -11,5 +11,11 @@
 typedef unsigned char uint8_t;
 typedef _Bool bool;
 
+// test_handle_functions
+typedef enum UnknownEnum
+{
+    UnknownConst = 0,
+} UnknownEnum;
+
 
 #endif  // HELPER

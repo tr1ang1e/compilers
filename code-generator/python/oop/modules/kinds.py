@@ -1,10 +1,6 @@
-from clang.cindex import CursorKind
+from clang.cindex import CursorKind, TokenGroup
 from debug import print_cursor_info
 
-# self.name = cursor.displayname
-# self.srcType = cursor.type.spelling
-# self.canonType = cursor.type.get_canonical().spelling
-# self.aliasType = None
 
 typesMapping = {
 
@@ -57,7 +53,7 @@ class Kinds:
 class CommonTypeData:
     def __init__(self, cursor, unit):
         self.cursor = cursor
-        self.file = unit.spelling
+        self.unit = unit
 
     def handle(self):
         raise NotImplementedError
@@ -70,11 +66,20 @@ class CommonTypeData:
         base_type, pointers_count, array_sizes = CommonTypeData.get_base_type(input_type)
         ctype = Typedef.get_alias(base_type)
         if ctype is None:
-            ctype = typesMapping[base_type]
-
-            # both 'void' and 'void*' types should be mapped to 'c_void_p'
-            if base_type == 'void' and pointers_count > 0:
-                pointers_count -= 1
+            if base_type in typesMapping.keys():
+                ctype = typesMapping[base_type]
+                # both 'void' and 'void*' types should be mapped to 'c_void_p'
+                if base_type == 'void' and pointers_count > 0:
+                    pointers_count -= 1
+                # 'char*' should ve mapped to 'c_char_p'
+                if base_type == 'char' and pointers_count > 0:
+                    ctype = 'c_char_p'
+                    pointers_count -= 1
+            else:
+                ctype = 'c_void_p'
+                print("Warning! Type {} was not recognized and was replaced with 'c_void_p'. "
+                      "If it was expected, put this type explicitly to typesMapping list in kinds.py module"
+                      .format(base_type))
 
         # apply pointers
         for i in range(pointers_count):
@@ -124,6 +129,7 @@ class CommonTypeData:
         return result_type, array_sizes, pointer
 
 
+# TODO: function pointer typedefs
 class Typedef(CommonTypeData):
     _aliases = dict()
     _underlyings = dict()
@@ -135,7 +141,7 @@ class Typedef(CommonTypeData):
 
     def handle(self):
         self.alias = self.cursor.type.spelling
-        self.underlying = self.cursor.underlying_typedef_type.spelling
+        self.underlying = self.cursor.underlying_typedef_type.spelling  # TODO: get_ctype() (to print enum names, functions typedef pointers and handlers)
         self.__class__._update_typedefs(self.alias, self.underlying)
 
     def generate(self):
@@ -151,7 +157,9 @@ class Typedef(CommonTypeData):
 
     @classmethod
     def get_alias(cls, input_type):
-        if input_type in cls._underlyings.keys():
+        if input_type in cls._aliases.keys():
+            input_type = cls._aliases[input_type]   # get underlying type to use the same typedef in all cases
+        if input_type in cls._underlyings.keys():   # not 'elif': important if input_type is alias already
             return cls._underlyings[input_type][0]  # zero alias would be used if several are available
         else:
             return None
@@ -159,8 +167,26 @@ class Typedef(CommonTypeData):
 
 class Macro(CommonTypeData):
 
+    def __init__(self, cursor, unit):
+        super().__init__(cursor, unit)
+        self.name = None
+        self.value = None
+
     def handle(self):
-        pass
+        tokens = []
+        for token in TokenGroup.get_tokens(self.unit, self.cursor.extent):
+            tokens.append(token.spelling)
+        # MACRO 1 or MACRO "string"
+        if len(tokens) == 2:
+            self.name = tokens[0]
+            self.value = tokens[1]
+        # MACRO (1)
+        elif len(tokens) == 4 and tokens[1] == '(' and tokens[2] != '...' and tokens[3] == ')':
+            self.name = tokens[0]
+            self.value = tokens[2]
+        else:
+            return
+        self.value = 'c_int(' + self.value + ')' if self.value.isdigit() else self.value
 
     def generate(self):
         pass
@@ -168,8 +194,15 @@ class Macro(CommonTypeData):
 
 class Enum(CommonTypeData):
 
+    def __init__(self, cursor, unit):
+        super().__init__(cursor, unit)
+        self.type = None
+        self.constants = dict()
+
     def handle(self):
-        pass
+        self.type = self.get_ctype(self.cursor.type.spelling)
+        for const in self.cursor.get_children():
+            self.constants[const.displayname] = const.enum_value
 
     def generate(self):
         pass
@@ -179,9 +212,10 @@ class Struct(CommonTypeData):
 
     def handle(self):
         # debug
-        print("STRUCT")
-        for field in self.cursor.get_children():
-            print_cursor_info(field)
+        # print_cursor_info(self.cursor)
+        # for field in self.cursor.get_children():
+        #     print_cursor_info(field)
+        pass
 
     def generate(self):
         pass
@@ -189,8 +223,20 @@ class Struct(CommonTypeData):
 
 class Function(CommonTypeData):
 
+    def __init__(self, cursor, unit):
+        super().__init__(cursor, unit)
+        self.name = None
+        self.type = None
+        self.args = list()
+
     def handle(self):
-        pass
+        self.name = self.cursor.displayname.partition('(')[0]
+        if self.name.startswith('ENUM') or self.name.startswith('SDK_') or self.name.endswith('ToString'):
+            self.name = None
+        else:
+            self.type = self.get_ctype(self.cursor.type.get_result().spelling)
+            for arg in self.cursor.get_arguments():
+                self.args.append(self.get_ctype(arg.type.spelling))
 
     def generate(self):
         pass

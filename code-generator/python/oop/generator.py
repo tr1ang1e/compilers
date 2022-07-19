@@ -1,3 +1,6 @@
+import sys
+sys.path.append('./modules')
+
 from modules.kinds import Kinds, Type
 from modules.parser import Parser
 from modules.writer import Writer
@@ -17,7 +20,7 @@ def is_appropriate(cursor, unit_spelling, kinds):
 def visitor_function(parent, parser, writer, kinds):
     for cursor in parent.get_children():
         if is_appropriate(cursor, parser.currentUnit.spelling, kinds):
-            type_instance = Type.get_instance(cursor, parser.currentUnit)
+            type_instance = Type().get_instance(cursor, parser.currentUnit)
             type_instance.handle()
             writer.update_containers(type_instance)
         visitor_function(cursor, parser, writer, kinds)
@@ -25,7 +28,6 @@ def visitor_function(parent, parser, writer, kinds):
 
 def traverse_ast(parser, writer, kinds):
     for translation_unit in parser.parse_next_file():
-        print("  unit = {}".format(translation_unit.spelling))
         visitor_function(translation_unit.cursor, parser, writer, kinds)
 
 
@@ -33,11 +35,17 @@ def main():
     parser = Parser()
     writer = Writer()
 
-    print(" :: Preparing. Processing typedefs ")
+    print(":: Preparing. Processing typedefs ")
     traverse_ast(parser, writer, [CursorKind.TYPEDEF_DECL])
 
-    print(" :: Processing macros, user types and functions ")
+    # debug
+    #
+
+    print(":: Processing macros, user types and functions ")
     traverse_ast(parser, writer, [kind for kind in Kinds.cursorKinds.keys() if kind != CursorKind.TYPEDEF_DECL])
+
+    # debug
+    #
 
     writer.generate_output(parser.outputFile)
 

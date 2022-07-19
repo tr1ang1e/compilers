@@ -32,7 +32,7 @@ class Parser:
         settings_dict = json.load(settings_file)
 
         self._projectPath = settings_dict["project"]
-        self._parseFiles = settings_dict["files"]
+        self._parseFiles = [self._projectPath + file for file in settings_dict["files"]]
         self.outputFile = settings_dict["output"]
 
         self._clangArgs = []
@@ -46,6 +46,7 @@ class Parser:
 
     def parse_next_file(self):
         for next_file in self._parseFiles:
+            print('   {}'.format(next_file))
             self.currentUnit = self._parserIndex.parse(next_file, args=self._clangArgs, options=self._clangOptions)
             yield self.currentUnit
 
