@@ -54,6 +54,7 @@ class CommonTypeData:
     def __init__(self, cursor, unit):
         self.cursor = cursor
         self.unit = unit
+        self.name = None
 
     def handle(self):
         raise NotImplementedError
@@ -61,24 +62,39 @@ class CommonTypeData:
     def generate(self):
         raise NotImplementedError
 
+    # TODO: change typedefs handling (what if typedef is for standard type?)
     @staticmethod
     def get_ctype(input_type):
         base_type, pointers_count, array_sizes = CommonTypeData.get_base_type(input_type)
         ctype = Typedef.get_alias(base_type)
         if ctype is None:
+
+            # explicit types mapping
             if base_type in typesMapping.keys():
                 ctype = typesMapping[base_type]
-                # both 'void' and 'void*' types should be mapped to 'c_void_p'
+
+                # both 'void' and 'void*' types mapped to 'c_void_p'
                 if base_type == 'void' and pointers_count > 0:
                     pointers_count -= 1
-                # 'char*' should ve mapped to 'c_char_p'
+
+                # 'char*' should be mapped to 'c_char_p'
                 if base_type == 'char' and pointers_count > 0:
                     ctype = 'c_char_p'
                     pointers_count -= 1
+
+            # enum type without typedef at all (cannot be replaced with 'c_int' alias)
+            elif base_type.find('enum ') != -1:
+                ctype = 'int'
+
+            # structure type without typedef at all (the same replace would be done for structure declaration)
+            elif base_type.find('struct ') != -1:
+                ctype = base_type.replace('struct ', 'struct_')
+
+            # type is from parsed but not generated file
             else:
                 ctype = 'c_void_p'
-                print("Warning! Type {} was not recognized and was replaced with 'c_void_p'. "
-                      "If it was expected, put this type explicitly to typesMapping list in kinds.py module"
+                print("Warning! Type '{}' was not recognized and was replaced with 'c_void_p'. "
+                      "If it was expected or replace was incorrect, put explicit mapping rule to the kinds.py module"
                       .format(base_type))
 
         # apply pointers
@@ -169,7 +185,6 @@ class Macro(CommonTypeData):
 
     def __init__(self, cursor, unit):
         super().__init__(cursor, unit)
-        self.name = None
         self.value = None
 
     def handle(self):
@@ -196,11 +211,14 @@ class Enum(CommonTypeData):
 
     def __init__(self, cursor, unit):
         super().__init__(cursor, unit)
-        self.type = None
         self.constants = dict()
 
     def handle(self):
-        self.type = self.get_ctype(self.cursor.type.spelling)
+        self.name = self.cursor.type.spelling
+        alias = Typedef.get_alias(self.name)
+        if alias is not None:
+            self.name = alias
+
         for const in self.cursor.get_children():
             self.constants[const.displayname] = const.enum_value
 
@@ -210,12 +228,24 @@ class Enum(CommonTypeData):
 
 class Struct(CommonTypeData):
 
+    def __init__(self, cursor, unit):
+        super().__init__(cursor, unit)
+        self.name = None
+        self.fields = dict()
+
     def handle(self):
-        # debug
-        # print_cursor_info(self.cursor)
-        # for field in self.cursor.get_children():
-        #     print_cursor_info(field)
-        pass
+        self.name = self.get_ctype(self.cursor.type.spelling)
+        for field in self.cursor.get_children():
+            field_name = field.displayname
+            field_type = field.type.spelling
+
+            # handle pointer to structure itself
+            field_base_type = self.get_base_type(field_type)[0]
+            if field_base_type.replace('struct ', 'struct_') == self.name:
+                field_type = field_type.replace(field_base_type, 'void')
+            field_type = self.get_ctype(field_type)
+
+            self.fields[field_name] = field_type
 
     def generate(self):
         pass
@@ -225,7 +255,6 @@ class Function(CommonTypeData):
 
     def __init__(self, cursor, unit):
         super().__init__(cursor, unit)
-        self.name = None
         self.type = None
         self.args = list()
 

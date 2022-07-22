@@ -44,7 +44,7 @@ def visitor_handle_enums(parent, parser, container):
             type_instance = Type().get_instance(cursor, parser.currentUnit)
             assert type_instance.__class__.__name__ == "Enum"
             type_instance.handle()
-            container.append((type_instance.type, type_instance.constants))
+            container.append((type_instance.name, type_instance.constants))
         visitor_typedef_parsing_iteration(cursor, parser, container)
 
 
@@ -56,6 +56,16 @@ def visitor_handle_functions(parent, parser, container):
             type_instance.handle()
             container.append((type_instance.name, type_instance.type, *type_instance.args))
         visitor_handle_functions(cursor, parser, container)
+
+
+def visitor_handle_structures(parent, parser, container):
+    for cursor in parent.get_children():
+        if is_appropriate(cursor, parser.currentUnit.spelling, [CursorKind.STRUCT_DECL]):
+            type_instance = Type().get_instance(cursor, parser.currentUnit)
+            assert type_instance.__class__.__name__ == "Struct"
+            type_instance.handle()
+            container.append((type_instance.name, *type_instance.fields.items()))
+        visitor_handle_structures(cursor, parser, container)
 
 
 # +------------------------------------------------------+
@@ -191,6 +201,8 @@ def test_handle_enums(parse_typedefs):
     for translation_unit in parser.parse_next_file():
         visitor_handle_enums(translation_unit.cursor, parser, container)
     assert ("EnumAlias_test", {"ZERO": 0, "ONE": 1}) in container
+    assert ("enum EnumWithoutTypedef_test", {"NEGATIVE": -1, "MACRO": 42}) in container
+    print(container)
 
 
 def test_handle_functions(parse_typedefs):
@@ -202,7 +214,19 @@ def test_handle_functions(parse_typedefs):
     assert ("FunctionEmpty_test", "c_void_p") in container
     assert ("FunctionDefault_test", "c_int32", "POINTER(c_int32)", "POINTER(c_char_p)") in container
     assert ("FunctionAliases_test", "EnumAlias_test", "POINTER(POINTER(Typedef_IncompleteStruct_test))") in container
-    assert ("FunctionUnknown_test", "c_void_p") in container  # plus warning message should appear
+    assert ("FunctionUnknown_test", "c_void_p", "POINTER(int)") in container  # plus warning message should appear
+
+
+# TODO: add more cases
+def test_handle_structures(parse_typedefs):
+    parser = parse_typedefs
+    container = []
+    print()
+    for translation_unit in parser.parse_next_file():
+        visitor_handle_structures(translation_unit.cursor, parser, container)
+    print(container)
+    assert ("Typedef_IncompleteStruct_test",) in container
+    assert ('struct_S_test', ('array', 'c_int32 * 123'), ('c', 'c_char'), ('self', 'POINTER(c_void_p)')) in container
 
 
 # +------------------------------------------------------+
