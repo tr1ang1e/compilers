@@ -62,40 +62,43 @@ class CommonTypeData:
     def generate(self):
         raise NotImplementedError
 
-    # TODO: change typedefs handling (what if typedef is for standard type?)
     @staticmethod
     def get_ctype(input_type):
         base_type, pointers_count, array_sizes = CommonTypeData.get_base_type(input_type)
-        ctype = Typedef.get_alias(base_type)
-        if ctype is None:
+        base_type = Typedef.get_type(base_type)
+        base_canonical_underlying = Typedef.get_canonical_underlying(base_type)
 
-            # explicit types mapping
-            if base_type in typesMapping.keys():
-                ctype = typesMapping[base_type]
+        # explicit types mapping
+        if base_type in typesMapping.keys():
+            ctype = typesMapping[base_type]
 
-                # both 'void' and 'void*' types mapped to 'c_void_p'
-                if base_type == 'void' and pointers_count > 0:
-                    pointers_count -= 1
+            # both 'void' and 'void*' types mapped to 'c_void_p'
+            if base_type == 'void' and pointers_count > 0:
+                pointers_count -= 1
 
-                # 'char*' should be mapped to 'c_char_p'
-                if base_type == 'char' and pointers_count > 0:
-                    ctype = 'c_char_p'
-                    pointers_count -= 1
+            # 'char*' should be mapped to 'c_char_p'
+            if base_type == 'char' and pointers_count > 0:
+                ctype = 'c_char_p'
+                pointers_count -= 1
 
-            # enum type without typedef at all (cannot be replaced with 'c_int' alias)
-            elif base_type.find('enum ') != -1:
-                ctype = 'int'
+        # enum type without typedef at all (cannot be replaced with 'c_int' alias)
+        elif base_type.find('enum ') != -1 and Enum.is_known(base_type):
+            ctype = 'int'
 
-            # structure type without typedef at all (the same replace would be done for structure declaration)
-            elif base_type.find('struct ') != -1:
-                ctype = base_type.replace('struct ', 'struct_')
+        # structure type without typedef at all (the same replace would be done for structure declaration)
+        elif base_type.find('struct ') != -1 and Struct.is_known(base_type):
+            ctype = base_type.replace('struct ', 'struct_')
 
-            # type is from parsed but not generated file
-            else:
-                ctype = 'c_void_p'
-                print("Warning! Type '{}' was not recognized and was replaced with 'c_void_p'. "
-                      "If it was expected or replace was incorrect, put explicit mapping rule to the kinds.py module"
-                      .format(base_type))
+        # alias for known user's type (order is important: don't place before 2 previous 'elif')
+        elif Struct.is_known(base_canonical_underlying) or Enum.is_known(base_canonical_underlying):
+            ctype = base_type
+
+        # type is from parsed but not generated file
+        else:
+            ctype = 'c_void_p'
+            print("Warning! Type '{}' was not recognized and was replaced with 'c_void_p'. "
+                  "If it was expected or replace was incorrect, put explicit mapping rule to the kinds.py module"
+                  .format(base_type))
 
         # apply pointers
         for i in range(pointers_count):
@@ -172,13 +175,39 @@ class Typedef(CommonTypeData):
             cls._underlyings[underlying] = [alias]
 
     @classmethod
-    def get_alias(cls, input_type):
-        if input_type in cls._aliases.keys():
-            input_type = cls._aliases[input_type]   # get underlying type to use the same typedef in all cases
-        if input_type in cls._underlyings.keys():   # not 'elif': important if input_type is alias already
-            return cls._underlyings[input_type][0]  # zero alias would be used if several are available
+    def get_type(cls, input_type):
+
+        """
+        returns:
+          - base type if input_type is alias to base type or a base type itself
+          - alias for users type (one alias even if several were used to typedef one underlying type)
+          - input_type itself if it is user's type and if it hasn't any aliases
+        """
+
+        # built-in type is given
+        if input_type in typesMapping.keys():
+            return input_type
+
         else:
-            return None
+            underlying_type = cls.get_canonical_underlying(input_type)
+
+            # alias for built-in type was given
+            if underlying_type in typesMapping.keys():
+                return underlying_type
+
+            # alias for user type or user type which alias is available for was given
+            if underlying_type in cls._underlyings.keys():
+                return cls._underlyings[underlying_type][0]
+
+            # possible only if input_type is user's and if it was never used in typedef statements
+            return input_type
+
+    @classmethod
+    def get_canonical_underlying(cls, alias):
+        if alias in cls._aliases.keys():
+            return cls.get_canonical_underlying(cls._aliases[alias])
+        else:
+            return alias
 
 
 class Macro(CommonTypeData):
@@ -208,6 +237,7 @@ class Macro(CommonTypeData):
 
 
 class Enum(CommonTypeData):
+    _enums = list()
 
     def __init__(self, cursor, unit):
         super().__init__(cursor, unit)
@@ -215,7 +245,8 @@ class Enum(CommonTypeData):
 
     def handle(self):
         self.name = self.cursor.type.spelling
-        alias = Typedef.get_alias(self.name)
+        self.__class__._enums.append(self.name)
+        alias = Typedef.get_type(self.name)
         if alias is not None:
             self.name = alias
 
@@ -225,8 +256,14 @@ class Enum(CommonTypeData):
     def generate(self):
         pass
 
+    @classmethod
+    def is_known(cls, input_type):
+        return input_type in cls._enums
 
+
+# TODO: incomplete type handling
 class Struct(CommonTypeData):
+    _structs = list()
 
     def __init__(self, cursor, unit):
         super().__init__(cursor, unit)
@@ -235,6 +272,7 @@ class Struct(CommonTypeData):
 
     def handle(self):
         self.name = self.get_ctype(self.cursor.type.spelling)
+        self.__class__._structs.append(self.name)
         for field in self.cursor.get_children():
             field_name = field.displayname
             field_type = field.type.spelling
@@ -249,6 +287,10 @@ class Struct(CommonTypeData):
 
     def generate(self):
         pass
+
+    @classmethod
+    def is_known(cls, input_type):
+        return input_type in cls._structs
 
 
 class Function(CommonTypeData):

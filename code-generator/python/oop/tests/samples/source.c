@@ -27,14 +27,6 @@ enum EnumWithoutTypedef_test
     MACRO = MACRO_INT1_test,
 }
 
-
-// test_handle_functions
-void FunctionEmpty_test();
-int FunctionDefault_test(int*, char**);
-EnumAlias_test FunctionAliases_test(struct IncompleteStruct_test**);
-UnknownEnum FunctionUnknown_test(enum EnumWithoutTypedef_test*);
-
-
 // test_handle_structs
 struct S_test
 {
@@ -42,3 +34,12 @@ struct S_test
     char c;
     struct S_test** self;
 };
+
+// test_handle_functions
+void FunctionEmpty_test();
+int FunctionDefault_test(int*, char**);
+EnumAlias_test FunctionAliases_test(struct IncompleteStruct_test**);
+UnknownEnum FunctionUnknownEnum_test(enum EnumWithoutTypedef_test*);
+struct UnknownStruct FunctionUnknownStruct_test(struct S_test*);
+
+

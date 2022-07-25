@@ -17,5 +17,11 @@ typedef enum UnknownEnum
     UnknownConst = 0,
 } UnknownEnum;
 
+// test_handle_functions
+struct UnknownStruct
+{
+    int i;
+}
+
 
 #endif  // HELPER

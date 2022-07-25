@@ -9,7 +9,7 @@ sys.path.append('../modules')
 import pytest
 from generator import is_appropriate
 from modules.parser import Parser
-from modules.kinds import CommonTypeData, Type, Typedef
+from modules.kinds import CommonTypeData, Type, Typedef, Enum, Struct
 from clang.cindex import CursorKind
 
 
@@ -87,6 +87,14 @@ def parse_typedefs(create_parser):
     for translation_unit in parser.parse_next_file():
         visitor_typedef_parsing_iteration(translation_unit.cursor, parser, container)
     return parser
+
+
+@pytest.fixture
+def add_types_manually():
+    Enum._enums.append("enum EnumWithoutTypedef_test")
+    Enum._enums.append("enum EnumUnderlying_test")
+    Struct._structs.append("struct S_test")
+    Struct._structs.append("struct IncompleteStruct_test")
 
 
 # +------------------------------------------------------+
@@ -205,7 +213,7 @@ def test_handle_enums(parse_typedefs):
     print(container)
 
 
-def test_handle_functions(parse_typedefs):
+def test_handle_functions(parse_typedefs, add_types_manually):
     parser = parse_typedefs
     container = []
     print()
@@ -214,7 +222,8 @@ def test_handle_functions(parse_typedefs):
     assert ("FunctionEmpty_test", "c_void_p") in container
     assert ("FunctionDefault_test", "c_int32", "POINTER(c_int32)", "POINTER(c_char_p)") in container
     assert ("FunctionAliases_test", "EnumAlias_test", "POINTER(POINTER(Typedef_IncompleteStruct_test))") in container
-    assert ("FunctionUnknown_test", "c_void_p", "POINTER(int)") in container  # plus warning message should appear
+    assert ("FunctionUnknownEnum_test", "c_void_p", "POINTER(int)") in container  # plus warning message should appear
+    assert ("FunctionUnknownStruct_test", "c_void_p", "POINTER(struct_S_test)") in container  # plus warning message
 
 
 # TODO: add more cases
