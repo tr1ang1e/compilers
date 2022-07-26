@@ -93,6 +93,10 @@ class CommonTypeData:
         elif Struct.is_known(base_canonical_underlying) or Enum.is_known(base_canonical_underlying):
             ctype = base_type
 
+        # alias for callback
+        elif Typedef.is_known(base_type) and base_canonical_underlying.find('(') != -1:
+            ctype = base_type
+
         # type is from parsed but not generated file
         else:
             ctype = 'c_void_p'
@@ -148,20 +152,19 @@ class CommonTypeData:
         return result_type, array_sizes, pointer
 
 
-# TODO: function pointer typedefs
 class Typedef(CommonTypeData):
     _aliases = dict()
     _underlyings = dict()
 
     def __init__(self, cursor, unit):
         super().__init__(cursor, unit)
-        self.alias = None
+        self.name = None
         self.underlying = None
 
     def handle(self):
-        self.alias = self.cursor.type.spelling
+        self.name = self.cursor.type.spelling
         self.underlying = self.cursor.underlying_typedef_type.spelling  # TODO: get_ctype() (to print enum names, functions typedef pointers and handlers)
-        self.__class__._update_typedefs(self.alias, self.underlying)
+        self.__class__._update_typedefs(self.name, self.underlying)
 
     def generate(self):
         pass
@@ -208,6 +211,10 @@ class Typedef(CommonTypeData):
             return cls.get_canonical_underlying(cls._aliases[alias])
         else:
             return alias
+
+    @classmethod
+    def is_known(cls, alias):
+        return alias in cls._aliases
 
 
 class Macro(CommonTypeData):

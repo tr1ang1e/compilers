@@ -9,7 +9,9 @@ class Writer(Kinds):
             self.containers[kind] = list()
 
     def update_containers(self, type_instance: CommonTypeData):
-        self.containers[type_instance.cursor.kind].append(type_instance)
+        # when type declaration and typedef are combined, clang tool handles type declaration twice  >>  skip one
+        if type_instance.name not in [instance.name for instance in self.containers[type_instance.cursor.kind]]:
+            self.containers[type_instance.cursor.kind].append(type_instance)
 
     def generate_output(self, filename: str):
         with open(filename, mode="w") as output:

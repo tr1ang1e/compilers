@@ -9,7 +9,8 @@ sys.path.append('../modules')
 import pytest
 from generator import is_appropriate
 from modules.parser import Parser
-from modules.kinds import CommonTypeData, Type, Typedef, Enum, Struct
+from modules.writer import Writer
+from modules.kinds import Kinds, CommonTypeData, Type, Typedef, Enum, Struct
 from clang.cindex import CursorKind
 
 
@@ -34,7 +35,7 @@ def visitor_typedef_parsing_iteration(parent, parser, container):
             type_instance = Type().get_instance(cursor, parser.currentUnit)
             assert type_instance.__class__.__name__ == "Typedef"
             type_instance.handle()
-            container.append((type_instance.alias, type_instance.underlying))
+            container.append((type_instance.name, type_instance.underlying))
         visitor_typedef_parsing_iteration(cursor, parser, container)
 
 
@@ -69,6 +70,25 @@ def visitor_handle_structures(parent, parser, container):
 
 
 # +------------------------------------------------------+
+# +     CANONICAL FUNCTIONS                              +
+# +------------------------------------------------------+
+
+
+def visitor_function(parent, parser, writer, kinds):
+    for cursor in parent.get_children():
+        if is_appropriate(cursor, parser.currentUnit.spelling, kinds):
+            type_instance = Type().get_instance(cursor, parser.currentUnit)
+            type_instance.handle()
+            writer.update_containers(type_instance)
+        visitor_function(cursor, parser, writer, kinds)
+
+
+def traverse_ast(parser, writer, kinds):
+    for translation_unit in parser.parse_next_file():
+        visitor_function(translation_unit.cursor, parser, writer, kinds)
+
+
+# +------------------------------------------------------+
 # +     FIXTURES                                         +
 # +------------------------------------------------------+
 
@@ -77,6 +97,11 @@ def visitor_handle_structures(parent, parser, container):
 def create_parser():
     parser = Parser(["--settings", "settings.json"])
     return parser
+
+
+@pytest.fixture
+def create_writer():
+    return Writer()
 
 
 @pytest.fixture
@@ -95,6 +120,12 @@ def add_types_manually():
     Enum._enums.append("enum EnumUnderlying_test")
     Struct._structs.append("struct S_test")
     Struct._structs.append("struct IncompleteStruct_test")
+    Struct._structs.append("struct S_callback_test")
+
+
+@pytest.fixture
+def call_canonical():
+    pass
 
 
 # +------------------------------------------------------+
@@ -143,8 +174,10 @@ def test_typedef_parsing_iteration(create_parser):
     assert ("bool_test", "bool") in container
     assert ("another_bool_test", "bool") in container
     assert ("EnumAlias_test", "enum EnumUnderlying_test") in container
-    # assert len(Typedef._aliases) == 4           # aliases have unique names
-    # assert len(Typedef._underlyings) == 3       # one type might have different aliases
+    assert ('callback_test', 'int (int)') in container
+    assert ('S_callback_test', 'struct S_callback_test') in container
+    # assert len(Typedef._aliases) == ...           # aliases have unique names
+    # assert len(Typedef._underlyings) == ...       # one type might have different aliases
 
 
 def test_manage_qualifiers():
@@ -227,7 +260,7 @@ def test_handle_functions(parse_typedefs, add_types_manually):
 
 
 # TODO: add more cases
-def test_handle_structures(parse_typedefs):
+def test_handle_structures(parse_typedefs, add_types_manually):
     parser = parse_typedefs
     container = []
     print()
@@ -236,6 +269,25 @@ def test_handle_structures(parse_typedefs):
     print(container)
     assert ("Typedef_IncompleteStruct_test",) in container
     assert ('struct_S_test', ('array', 'c_int32 * 123'), ('c', 'c_char'), ('self', 'POINTER(c_void_p)')) in container
+    assert ('S_callback_test', ('function', 'callback_test')) in container
+
+
+# def test_update_writer(create_parser, create_writer):   # why doesn't work in this way?
+def test_update_writer(create_parser, create_writer, add_types_manually):
+    parser = create_parser
+    writer = create_writer
+    traverse_ast(parser, writer, [CursorKind.TYPEDEF_DECL])
+    traverse_ast(parser, writer, [kind for kind in Kinds.cursorKinds.keys() if kind != CursorKind.TYPEDEF_DECL])
+    print()
+    container = []
+    for kind, instances in writer.containers.items():
+        for instance in instances:
+            container.append((kind, instance.name))
+    assert (CursorKind.TYPEDEF_DECL, 'u8_test') in container
+    assert (CursorKind.MACRO_DEFINITION, 'HEADER_DEFINE_test') in container
+    assert (CursorKind.ENUM_DECL, 'EnumAlias_test') in container
+    assert (CursorKind.STRUCT_DECL, 'S_callback_test') in container
+    assert (CursorKind.FUNCTION_DECL, 'FunctionEmpty_test') in container
 
 
 # +------------------------------------------------------+

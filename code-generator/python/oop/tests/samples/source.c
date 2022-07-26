@@ -8,7 +8,7 @@
 // test_typedef_parsing_iteration :: check first iteration
 // test_handle_structs
 typedef struct IncompleteStruct_test Typedef_IncompleteStruct_test;
-typedef bool another_bool_test
+typedef bool another_bool_test;
 
 
 // test_typedef_parsing_iteration
@@ -27,6 +27,18 @@ enum EnumWithoutTypedef_test
     MACRO = MACRO_INT1_test,
 }
 
+
+// test_typedef_parsing_iteration
+typedef int(callback_test*)(int);
+
+
+// test_handle_structs
+typedef struct S_callback_test
+{
+    callback_test function;
+} S_callback_test;
+
+
 // test_handle_structs
 struct S_test
 {
@@ -34,6 +46,7 @@ struct S_test
     char c;
     struct S_test** self;
 };
+
 
 // test_handle_functions
 void FunctionEmpty_test();
