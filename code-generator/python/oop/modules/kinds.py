@@ -1,5 +1,7 @@
 from clang.cindex import CursorKind, TokenGroup
-from debug import print_cursor_info
+
+
+ThisPointer = 'this'  # to use when structure has pointer to itself as it's field
 
 
 typesMapping = {
@@ -34,8 +36,9 @@ typesMapping = {
     "int64_t":                  "c_int64",
 
     # user's types
-    # otherwise would be implicitly replaced with warning
-    # hiding types backward compatibility
+    #     otherwise would be implicitly replaced with warning
+    #     hiding types backward compatibility
+    #     be aware of handlers for not incomplete types: currently they must be replaced by 'c_void_p'
 }
 
 
@@ -56,10 +59,14 @@ class CommonTypeData:
         self.unit = unit
         self.name = None
 
+    @property
+    def location(self):
+        return self.cursor.location.file.name
+
     def handle(self):
         raise NotImplementedError
 
-    def generate(self):
+    def generate(self, wrapper):
         raise NotImplementedError
 
     @staticmethod
@@ -67,6 +74,9 @@ class CommonTypeData:
         base_type, pointers_count, array_sizes = CommonTypeData.get_base_type(input_type)
         base_type = Typedef.get_type(base_type)
         base_canonical_underlying = Typedef.get_canonical_underlying(base_type)
+
+        # debug
+        # print("base = {}, canon = {}".format(base_type, base_canonical_underlying))
 
         # explicit types mapping
         if base_type in typesMapping.keys():
@@ -76,8 +86,12 @@ class CommonTypeData:
             if base_type == 'void' and pointers_count > 0:
                 pointers_count -= 1
 
+            # types to hide are mapped to 'c_void_p'
+            elif ctype == 'c_void_p':
+                pointers_count -= 1
+
             # 'char*' should be mapped to 'c_char_p'
-            if base_type == 'char' and pointers_count > 0:
+            elif base_type == 'char' and pointers_count > 0:
                 ctype = 'c_char_p'
                 pointers_count -= 1
 
@@ -95,6 +109,10 @@ class CommonTypeData:
 
         # alias for callback
         elif Typedef.is_known(base_type) and base_canonical_underlying.find('(') != -1:
+            ctype = base_type
+
+        # alias for type pointers
+        elif Typedef.is_known(base_type) and base_canonical_underlying.find('*') != -1:
             ctype = base_type
 
         # type is from parsed but not generated file
@@ -163,11 +181,44 @@ class Typedef(CommonTypeData):
 
     def handle(self):
         self.name = self.cursor.type.spelling
-        self.underlying = self.cursor.underlying_typedef_type.spelling  # TODO: get_ctype() (to print enum names, functions typedef pointers and handlers)
+        self.underlying = self.cursor.underlying_typedef_type.spelling
         self.__class__._update_typedefs(self.name, self.underlying)
 
-    def generate(self):
-        pass
+    def generate(self, wrapper):
+        alias = None
+        underlying = None
+
+        # struct: generate only handlers to avoid conflict with real declaration
+        if self.underlying.find("struct ") != -1 and self.underlying.find('*') != -1:
+            alias = self.name
+            base_type = self.get_ctype(self.get_base_type(self.underlying)[0])
+            if Struct.is_incomplete(base_type):
+                underlying = 'c_void_p'
+            else:
+                # TODO: generate in this file, but after structs
+                print(self.underlying, " - ", self.get_ctype(self.underlying))
+                underlying = self.get_ctype(self.underlying)
+
+        # enum: replace with 'c_int' only one of several aliases
+        elif self.underlying.find("enum ") != -1:
+            canonical = self.get_type(self.name)
+            if self.name == canonical:
+                alias = self.name
+                underlying = "c_int"
+
+        # functions: handle function pointer typedef
+        elif self.underlying.find('(') != -1:
+            types = self.underlying.replace(' (', ', ').replace(')', '').split(', ')
+            types = [self.get_ctype(curr) for curr in types]
+            alias = self.name
+            underlying = "CFUNCTYPE(" + ", ".join(types) + ")"
+
+        # built-in types: skip, all aliases are replaced to built-in types in Typedef.get_ctype()
+        else:
+            pass
+
+        if alias is not None and underlying is not None:
+            wrapper.write("{} = {} \n".format(alias, underlying))
 
     @classmethod
     def _update_typedefs(cls, alias, underlying):
@@ -214,7 +265,7 @@ class Typedef(CommonTypeData):
 
     @classmethod
     def is_known(cls, alias):
-        return alias in cls._aliases
+        return alias in cls._aliases.keys()
 
 
 class Macro(CommonTypeData):
@@ -227,20 +278,26 @@ class Macro(CommonTypeData):
         tokens = []
         for token in TokenGroup.get_tokens(self.unit, self.cursor.extent):
             tokens.append(token.spelling)
+
         # MACRO 1 or MACRO "string"
         if len(tokens) == 2:
             self.name = tokens[0]
             self.value = tokens[1]
+
         # MACRO (1)
         elif len(tokens) == 4 and tokens[1] == '(' and tokens[2] != '...' and tokens[3] == ')':
             self.name = tokens[0]
             self.value = tokens[2]
+
         else:
             return
+
         self.value = 'c_int(' + self.value + ')' if self.value.isdigit() else self.value
 
-    def generate(self):
-        pass
+    def generate(self, wrapper):
+        if self.value is not None:
+            value = "c_int(" + self.value + ")" if self.value.isdigit() else self.value
+            wrapper.write("{} = {} \n".format(self.name, value))
 
 
 class Enum(CommonTypeData):
@@ -251,8 +308,11 @@ class Enum(CommonTypeData):
         self.constants = dict()
 
     def handle(self):
+        # keep all handled enums original names
+        # necessary for correct get_ctype() working
         self.name = self.cursor.type.spelling
         self.__class__._enums.append(self.name)
+
         alias = Typedef.get_type(self.name)
         if alias is not None:
             self.name = alias
@@ -260,17 +320,19 @@ class Enum(CommonTypeData):
         for const in self.cursor.get_children():
             self.constants[const.displayname] = const.enum_value
 
-    def generate(self):
-        pass
+    def generate(self, wrapper):
+        wrapper.write("\n# {}\n".format(self.name))
+        for name, value in self.constants.items():
+            wrapper.write("{} = c_int({})\n".format(name, value))
 
     @classmethod
     def is_known(cls, input_type):
         return input_type in cls._enums
 
 
-# TODO: incomplete type handling
 class Struct(CommonTypeData):
     _structs = list()
+    _incomplete = list()
 
     def __init__(self, cursor, unit):
         super().__init__(cursor, unit)
@@ -278,26 +340,57 @@ class Struct(CommonTypeData):
         self.fields = dict()
 
     def handle(self):
+        # keep all handled structures original names
+        # necessary for correct get_ctype() working
+        self.__class__._structs.append(self.cursor.type.spelling)
+
         self.name = self.get_ctype(self.cursor.type.spelling)
-        self.__class__._structs.append(self.name)
         for field in self.cursor.get_children():
             field_name = field.displayname
-            field_type = field.type.spelling
+            field_type = self.get_ctype(field.type.spelling)
 
-            # handle pointer to structure itself
-            field_base_type = self.get_base_type(field_type)[0]
-            if field_base_type.replace('struct ', 'struct_') == self.name:
-                field_type = field_type.replace(field_base_type, 'void')
-            field_type = self.get_ctype(field_type)
+            '''
+            handle pointer to structure itself 
+            '''
+
+            # if field type is pointer to structure name or alias
+            if field_type.find("POINTER(" + self.name + ")") != -1:
+                field_type = field_type.replace("POINTER(" + self.name + ")", ThisPointer)
+
+            # if field type is 'handler' = alias to pointer to structure or alias
+            elif self.is_handler(field.type.spelling):
+                field_type = field_type.replace(self.get_base_type(field.type.spelling)[0], ThisPointer)
 
             self.fields[field_name] = field_type
 
-    def generate(self):
-        pass
+        if not len(self.fields):
+            self.__class__._incomplete.append(self.name)
+        elif self.name in self.__class__._incomplete:
+            self.__class__._incomplete.remove(self.name)
+
+    def generate(self, wrapper):
+        incomplete = "# incomplete type, pointers to type replaced with 'c_void_p'" if not len(self.fields) else ""
+        wrapper.write("\n\nclass {}(Structure):  {}\n".format(self.name, incomplete))
+        wrapper.write("    _fields_ = [")
+
+        for field_name, field_type in self.fields.items():
+            wrapper.write("\n        (\"{}\", {}),".format(field_name, field_type))
+
+        wrapper.write("\n    ]\n")
 
     @classmethod
     def is_known(cls, input_type):
         return input_type in cls._structs
+
+    @classmethod
+    def is_incomplete(cls, input_type):
+        return input_type in cls._incomplete
+
+    def is_handler(self, type_spelling):
+        field_base_type = self.get_base_type(type_spelling)[0]
+        field_canonical_type = Typedef.get_canonical_underlying(field_base_type).replace('*', '').strip()
+        struct_canonical_type = Typedef.get_canonical_underlying(self.name).replace("struct_", "struct ").strip()
+        return field_canonical_type == struct_canonical_type
 
 
 class Function(CommonTypeData):
@@ -316,7 +409,7 @@ class Function(CommonTypeData):
             for arg in self.cursor.get_arguments():
                 self.args.append(self.get_ctype(arg.type.spelling))
 
-    def generate(self):
+    def generate(self, wrapper):
         pass
 
 

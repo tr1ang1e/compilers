@@ -8,6 +8,7 @@
 // test_typedef_parsing_iteration :: check first iteration
 // test_handle_structs
 typedef struct IncompleteStruct_test Typedef_IncompleteStruct_test;
+typedef struct IncompleteStruct_test * IncompleteHandler_test
 typedef bool another_bool_test;
 
 
@@ -29,7 +30,7 @@ enum EnumWithoutTypedef_test
 
 
 // test_typedef_parsing_iteration
-typedef int(callback_test*)(int);
+typedef int(callback_test*)(int, int);
 
 
 // test_handle_structs
@@ -40,11 +41,13 @@ typedef struct S_callback_test
 
 
 // test_handle_structs
+typedef struct S_test* S_handler
 struct S_test
 {
     int array[123];
     char c;
     struct S_test** self;
+    S_handler* self_handler;
 };
 
 
@@ -56,3 +59,26 @@ UnknownEnum FunctionUnknownEnum_test(enum EnumWithoutTypedef_test*);
 struct UnknownStruct FunctionUnknownStruct_test(struct S_test*);
 
 
+// handling pointers to structure inside this structure
+// different cases
+
+typedef struct T* T_handler;
+
+struct T
+{
+    T_handler t;
+}
+
+typedef struct P P_alias;
+
+struct P
+{
+    P_alias* p;
+}
+
+typedef struct Q* Q_handler
+
+typedef struct Q
+{
+    Q_handler* q;
+} Q_alias;

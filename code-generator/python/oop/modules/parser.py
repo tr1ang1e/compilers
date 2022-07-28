@@ -50,6 +50,10 @@ class Parser:
             self.currentUnit = self._parserIndex.parse(next_file, args=self._clangArgs, options=self._clangOptions)
             yield self.currentUnit
 
+    @property
+    def files(self):
+        return self._parseFiles
+
     @staticmethod
     def initialize_argument_parser():
         parser = argparse.ArgumentParser()

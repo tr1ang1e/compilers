@@ -70,25 +70,6 @@ def visitor_handle_structures(parent, parser, container):
 
 
 # +------------------------------------------------------+
-# +     CANONICAL FUNCTIONS                              +
-# +------------------------------------------------------+
-
-
-def visitor_function(parent, parser, writer, kinds):
-    for cursor in parent.get_children():
-        if is_appropriate(cursor, parser.currentUnit.spelling, kinds):
-            type_instance = Type().get_instance(cursor, parser.currentUnit)
-            type_instance.handle()
-            writer.update_containers(type_instance)
-        visitor_function(cursor, parser, writer, kinds)
-
-
-def traverse_ast(parser, writer, kinds):
-    for translation_unit in parser.parse_next_file():
-        visitor_function(translation_unit.cursor, parser, writer, kinds)
-
-
-# +------------------------------------------------------+
 # +     FIXTURES                                         +
 # +------------------------------------------------------+
 
@@ -123,9 +104,32 @@ def add_types_manually():
     Struct._structs.append("struct S_callback_test")
 
 
+# +------------------------------------------------------+
+# +     FULL PARSING FIXTURE                             +
+# +------------------------------------------------------+
+
+
+def visitor_function(parent, parser, writer, kinds):
+    for cursor in parent.get_children():
+        if is_appropriate(cursor, parser.currentUnit.spelling, kinds):
+            type_instance = Type().get_instance(cursor, parser.currentUnit)
+            type_instance.handle()
+            writer.update_containers(type_instance)
+        visitor_function(cursor, parser, writer, kinds)
+
+
+def traverse_ast(parser, writer, kinds):
+    for translation_unit in parser.parse_next_file():
+        visitor_function(translation_unit.cursor, parser, writer, kinds)
+
+
 @pytest.fixture
-def call_canonical():
-    pass
+def parse_all(create_parser, create_writer):
+    parser = create_parser
+    writer = create_writer
+    traverse_ast(parser, writer, [CursorKind.TYPEDEF_DECL])
+    traverse_ast(parser, writer, [kind for kind in Kinds.cursorKinds.keys() if kind != CursorKind.TYPEDEF_DECL])
+    return parser, writer
 
 
 # +------------------------------------------------------+
@@ -170,11 +174,12 @@ def test_typedef_parsing_iteration(create_parser):
     for translation_unit in parser.parse_next_file():
         visitor_typedef_parsing_iteration(translation_unit.cursor, parser, container)
     assert ("Typedef_IncompleteStruct_test", "struct IncompleteStruct_test") in container
+    assert ("IncompleteHandler_test", "struct IncompleteStruct_test *") in container
     assert ("u8_test", "uint8_t") in container
     assert ("bool_test", "bool") in container
     assert ("another_bool_test", "bool") in container
     assert ("EnumAlias_test", "enum EnumUnderlying_test") in container
-    assert ('callback_test', 'int (int)') in container
+    assert ('callback_test', 'int (int, int)') in container
     assert ('S_callback_test', 'struct S_callback_test') in container
     # assert len(Typedef._aliases) == ...           # aliases have unique names
     # assert len(Typedef._underlyings) == ...       # one type might have different aliases
@@ -259,7 +264,6 @@ def test_handle_functions(parse_typedefs, add_types_manually):
     assert ("FunctionUnknownStruct_test", "c_void_p", "POINTER(struct_S_test)") in container  # plus warning message
 
 
-# TODO: add more cases
 def test_handle_structures(parse_typedefs, add_types_manually):
     parser = parse_typedefs
     container = []
@@ -268,26 +272,31 @@ def test_handle_structures(parse_typedefs, add_types_manually):
         visitor_handle_structures(translation_unit.cursor, parser, container)
     print(container)
     assert ("Typedef_IncompleteStruct_test",) in container
-    assert ('struct_S_test', ('array', 'c_int32 * 123'), ('c', 'c_char'), ('self', 'POINTER(c_void_p)')) in container
     assert ('S_callback_test', ('function', 'callback_test')) in container
+    assert ('struct_S_test', ('array', 'c_int32 * 123'),
+                             ('c', 'c_char'),
+                             ('self', 'POINTER(this)'),
+                             ('self_handler', 'POINTER(this)')) in container
 
 
-# def test_update_writer(create_parser, create_writer):   # why doesn't work in this way?
-def test_update_writer(create_parser, create_writer, add_types_manually):
-    parser = create_parser
-    writer = create_writer
-    traverse_ast(parser, writer, [CursorKind.TYPEDEF_DECL])
-    traverse_ast(parser, writer, [kind for kind in Kinds.cursorKinds.keys() if kind != CursorKind.TYPEDEF_DECL])
+def test_update_writer(parse_all):
+    parser, writer = parse_all
     print()
     container = []
     for kind, instances in writer.containers.items():
         for instance in instances:
             container.append((kind, instance.name))
+
+    # all containers work fine
     assert (CursorKind.TYPEDEF_DECL, 'u8_test') in container
     assert (CursorKind.MACRO_DEFINITION, 'HEADER_DEFINE_test') in container
     assert (CursorKind.ENUM_DECL, 'EnumAlias_test') in container
     assert (CursorKind.STRUCT_DECL, 'S_callback_test') in container
     assert (CursorKind.FUNCTION_DECL, 'FunctionEmpty_test') in container
+
+    # test case with combined typedef and type declaration
+    assert (CursorKind.STRUCT_DECL, 'struct S_callback_test') not in container      # only alias is used
+    assert container.count((CursorKind.STRUCT_DECL, 'S_callback_test')) == 1        # only one copy is used
 
 
 # +------------------------------------------------------+
@@ -295,16 +304,9 @@ def test_update_writer(create_parser, create_writer, add_types_manually):
 # +------------------------------------------------------+
 
 
-def visitor_debug(parent, parser):
-    for cursor in parent.get_children():
-        if is_appropriate(cursor, parser.currentUnit.spelling, [CursorKind.STRUCT_DECL]):
-            type_instance = Type().get_instance(cursor, parser.currentUnit)
-            type_instance.handle()
-        visitor_debug(cursor, parser)
-
-
-def test_debug(create_parser):
-    parser = create_parser
+def test_debug(parse_all):
+    parser, writer = parse_all
     print()
-    for translation_unit in parser.parse_next_file():
-        visitor_debug(translation_unit.cursor, parser)
+    # for k, v in Typedef._aliases.items():
+    #     print(k, v)
+    writer.generate_output(parser.outputFile, parser.files)
