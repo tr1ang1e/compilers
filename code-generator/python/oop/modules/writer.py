@@ -21,23 +21,21 @@ class Writer(Kinds):
         else:
             self.containers[type_instance.cursor.kind][parsed_instances_names.index(type_instance.name)] = type_instance
 
-    def generate_output(self, output_file: str, parsed_files: list):
+        # debug
+        # if type_instance.cursor.kind == CursorKind.STRUCT_DECL:
+        #    print(type_instance.name)
+
+
+    def generate_output(self, output_file: str, parsed_files: list, prefix: str):
         with open(output_file, mode="w") as wrapper:
             self.__class__.write_beginning(wrapper)
-            self.write_content(wrapper, parsed_files)
-            self.write_functions_class(wrapper, parsed_files)
+            self.write_kinds(wrapper, parsed_files, prefix, [k for k in Kinds.cursorKinds if k != CursorKind.FUNCTION_DECL])
+            self.write_functions_class(wrapper, parsed_files, prefix)
 
-    @staticmethod
-    def write_beginning(wrapper):
-        wrapper.write("#!/usr/bin/python3\n")
-        wrapper.write("import platform\n")
-        wrapper.write("from ctypes import *\n\n")
-        wrapper.write("this = c_void_p  # to use when structure has pointer to itself as it's field \n\n")
-
-    def write_kinds(self, wrapper, parsed_files, kinds):
+    def write_kinds(self, wrapper, parsed_files, prefix, kinds):
         for current in parsed_files:
             wrapper.write("# +----------------------------------------------------------------------+\n")
-            wrapper.write("# +    {:<65} +\n".format(current))
+            wrapper.write("# +    {:<65} +\n".format(current[len(prefix)::]))
             wrapper.write("# +----------------------------------------------------------------------+\n\n")
 
             for kind, instances in self.containers.items():
@@ -48,13 +46,17 @@ class Writer(Kinds):
                     if len(from_current):
                         wrapper.write('\n')
 
-    def write_content(self, wrapper, parsed_files):
-        self.write_kinds(wrapper, parsed_files, [k for k in Kinds.cursorKinds if k != CursorKind.FUNCTION_DECL])
-
-    def write_functions_class(self, wrapper, parsed_files):
+    def write_functions_class(self, wrapper, parsed_files, prefix):
         self.__class__.write_function_class_beginning(wrapper)
-        self.write_kinds(wrapper, parsed_files, [CursorKind.FUNCTION_DECL])
+        self.write_kinds(wrapper, parsed_files, prefix, [CursorKind.FUNCTION_DECL])
         self.__class__.write_function_class_ending(wrapper)
+
+    @staticmethod
+    def write_beginning(wrapper):
+        wrapper.write("#!/usr/bin/python3\n")
+        wrapper.write("import platform\n")
+        wrapper.write("from ctypes import *\n\n")
+        wrapper.write("this = c_void_p  # to use when structure has pointer to itself as it's field \n\n")
 
     @staticmethod
     def write_function_class_beginning(wrapper):

@@ -51,6 +51,10 @@ class Parser:
             yield self.currentUnit
 
     @property
+    def project(self):
+        return self._projectPath
+
+    @property
     def files(self):
         return self._parseFiles
 

@@ -260,7 +260,7 @@ def test_handle_functions(parse_typedefs, add_types_manually):
     assert ("FunctionEmpty_test", "c_void_p") in container
     assert ("FunctionDefault_test", "c_int32", "POINTER(c_int32)", "POINTER(c_char_p)") in container
     assert ("FunctionAliases_test", "EnumAlias_test", "POINTER(POINTER(Typedef_IncompleteStruct_test))") in container
-    assert ("FunctionUnknownEnum_test", "c_void_p", "POINTER(int)") in container  # plus warning message should appear
+    assert ("FunctionUnknownEnum_test", "c_void_p", "POINTER(c_int)") in container  # plus warning message should appear
     assert ("FunctionUnknownStruct_test", "c_void_p", "POINTER(struct_S_test)") in container  # plus warning message
 
 
@@ -307,6 +307,4 @@ def test_update_writer(parse_all):
 def test_debug(parse_all):
     parser, writer = parse_all
     print()
-    # for k, v in Typedef._aliases.items():
-    #     print(k, v)
-    writer.generate_output(parser.outputFile, parser.files)
+    writer.generate_output(parser.outputFile, parser.files, parser.project)

@@ -22,7 +22,8 @@ def visitor_function(parent, parser, writer, kinds):
         if is_appropriate(cursor, parser.currentUnit.spelling, kinds):
             type_instance = Type().get_instance(cursor, parser.currentUnit)
             type_instance.handle()
-            writer.update_containers(type_instance)
+            if type_instance.name is not None:  # some instance should be skipped
+                writer.update_containers(type_instance)
         visitor_function(cursor, parser, writer, kinds)
 
 
@@ -47,7 +48,8 @@ def main():
     # debug
     #
 
-    writer.generate_output(parser.outputFile)
+    print(":: Generating wrapper")
+    writer.generate_output(parser.outputFile, parser.files, parser.project)
 
 
 if __name__ == "__main__":
