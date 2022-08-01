@@ -1,4 +1,4 @@
-from kinds import Kinds, CommonTypeData
+from .kinds import Kinds, CommonTypeData
 from clang.cindex import CursorKind
 from datetime import datetime
 
@@ -21,14 +21,9 @@ class Writer(Kinds):
         else:
             self.containers[type_instance.cursor.kind][parsed_instances_names.index(type_instance.name)] = type_instance
 
-        # debug
-        # if type_instance.cursor.kind == CursorKind.STRUCT_DECL:
-        #    print(type_instance.name)
-
-
     def generate_output(self, output_file: str, parsed_files: list, prefix: str):
         with open(output_file, mode="w") as wrapper:
-            self.__class__.write_beginning(wrapper)
+            self.write_beginning(wrapper)
             self.write_kinds(wrapper, parsed_files, prefix, [k for k in Kinds.cursorKinds if k != CursorKind.FUNCTION_DECL])
             self.write_functions_class(wrapper, parsed_files, prefix)
 
@@ -47,9 +42,9 @@ class Writer(Kinds):
                         wrapper.write('\n')
 
     def write_functions_class(self, wrapper, parsed_files, prefix):
-        self.__class__.write_function_class_beginning(wrapper)
+        self.write_function_class_beginning(wrapper)
         self.write_kinds(wrapper, parsed_files, prefix, [CursorKind.FUNCTION_DECL])
-        self.__class__.write_function_class_ending(wrapper)
+        self.write_function_class_ending(wrapper)
 
     @staticmethod
     def write_beginning(wrapper):
@@ -65,17 +60,17 @@ class Writer(Kinds):
         wrapper.write("# +    {:<65} +\n".format("Functions class"))
         wrapper.write("# +----------------------------------------------------------------------+\n")
         wrapper.write("""
-class VlnsAPhySdk(object):
+class Class(object):
     _instance = None
     _initialized = False
     
     def __new__(cls, *args, **kwargs):
-        if VlnsAPhySdk._instance is None:
-            VlnsAPhySdk._instance = object.__new__(cls)
-        return VlnsAPhySdk._instance 
+        if Class._instance is None:
+            Class._instance = object.__new__(cls)
+        return Class._instance 
     
     def __init__(self, libpath=None): 
-        if VlnsAPhySdk._initialized: 
+        if Class._initialized: 
             pass 
         else: 
             if libpath is None: 
@@ -90,17 +85,17 @@ class VlnsAPhySdk(object):
         generated = datetime.now().strftime("%d.%m.%Y %H:%M:%S")
         wrapper.write("""
             # init
+            
+            version = ...
+            print('+---------------------------------------------------------------+')
+            print('Py Wrapper: ...
+            print('+---------------------------------------------------------------+')
 
-            sdk_version = self.aphy_sdk_version()
-            print('*****************************************************************')
-            print('Py Wrapper: {0} [APhySdk: {1}]'.format(VlnsAPhySdk.get_version(), sdk_version.versionString))
-            print('*****************************************************************')
-
-            status = self.valens_aphy_init(True)
+            status = ... init() ...
             if not status:
-                raise Exception("Failed to init 'valens_aphy' library") 
+                raise Exception("Failed to init '...' library") 
 
-            VlnsAPhySdk._initialized = True
+            instance._initialized = True
 
     @staticmethod 
     def get_version():

@@ -1,9 +1,6 @@
 from clang.cindex import Cursor, CursorKind, TokenGroup
 
 
-ThisPointer = 'this'  # to use when structure has pointer to itself as it's field
-
-
 typesMapping = {
 
     # built-in types
@@ -35,36 +32,21 @@ typesMapping = {
     "signed long_long":         "c_int64",
     "int64_t":                  "c_int64",
 
-    # user's types
-
-    "HostCmdEnum":              "c_int",
-    "union NotificationId":     "c_uint32",
-    "MUTEX_TYPE":               "c_int32",
-    "CONDITION_TYPE":           "c_int32",
-    "THREAD_TYPE":              "c_void_p",
-
-    # otherwise would be implicitly replaced with warning
-
-    "AppEventMsg":              "c_void_p",
-    "APhyFifo":                 "c_void_p",
-    "APhyFifoHandle":           "c_void_p",
-    "RifContext":               "c_void_p",
-    "FwLogOutputStream":        "c_void_p",
-
-    # hiding typed backward compatibility
-    # be aware of handlers for not incomplete types: currently they must be replaced by 'c_void_p'
-
-    "EventsClient":             "c_void_p",  # not incomplete type
-    "APhyClientContext":        "c_void_p",
-    "APhyNative":               "c_void_p",  # doesn't seem to appear anywhere
-    "SpiAdapter":               "c_void_p",  # not incomplete type
-    "I2cAdapter":               "c_void_p",  # not incomplete type
-    "Acmp":                     "c_void_p",  
+    # add types mapping rules:
+    #   1 = user's types
+    #   2 = otherwise would be implicitly replaced with warning
+    #   3 = hiding typed backward compatibility (be aware of handlers for not incomplete types: currently they must be replaced by 'c_void_p')
 }
+
+
+ThisPointer = 'this'  # to use when structure has pointer to itself as it's field
 
 
 class Kinds:
 
+    # to add new kind management:
+    #    1. update: CursorKind.<NEW_KIND> : "NewKind": 
+    #    2. create: class NewKind(CommonTypeData) 
     cursorKinds = {
         CursorKind.TYPEDEF_DECL:         "Typedef",
         CursorKind.MACRO_DEFINITION:     "Macro",
@@ -72,9 +54,6 @@ class Kinds:
         CursorKind.STRUCT_DECL:          "Struct",
         CursorKind.FUNCTION_DECL:        "Function",
     }
-
-
-class Type(Kinds):
 
     def __init__(self):
         self.types = dict()
@@ -211,7 +190,7 @@ class Typedef(CommonTypeData):
     def handle(self):
         self.name = self.cursor.type.spelling
         self.underlying = self.cursor.underlying_typedef_type.spelling
-        self.__class__._update_typedefs(self.name, self.underlying)
+        self._update_typedefs(self.name, self.underlying)
 
     def generate(self, wrapper):
         alias = None
@@ -426,7 +405,6 @@ class Struct(CommonTypeData):
         field_canonical_type = Typedef.get_canonical_underlying(field_base_type).replace('*', '').strip()
         struct_canonical_type = Typedef.get_canonical_underlying(self.name).replace("struct_", "struct ").strip()
         return field_canonical_type == struct_canonical_type
-
 
 
 class Function(CommonTypeData):

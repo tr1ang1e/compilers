@@ -3,14 +3,11 @@
 
 import sys
 sys.path.append('..')
-sys.path.append('../modules')
 
 
 import pytest
 from generator import is_appropriate
-from modules.parser import Parser
-from modules.writer import Writer
-from modules.kinds import Kinds, CommonTypeData, Type, Typedef, Enum, Struct
+from modules import Parser, Writer, Kinds, CommonTypeData, Enum, Struct
 from clang.cindex import CursorKind
 
 
@@ -22,7 +19,7 @@ from clang.cindex import CursorKind
 def visitor_traverse_ast(parent, parser, container):
     for cursor in parent.get_children():
         if is_appropriate(cursor, parser.currentUnit.spelling, [CursorKind.MACRO_DEFINITION]):
-            type_instance = Type().get_instance(cursor, parser.currentUnit)
+            type_instance = Kinds().get_instance(cursor, parser.currentUnit)
             assert type_instance.__class__.__name__ == "Macro"
             type_instance.handle()
             container[type_instance.name] = type_instance.value
@@ -32,7 +29,7 @@ def visitor_traverse_ast(parent, parser, container):
 def visitor_typedef_parsing_iteration(parent, parser, container):
     for cursor in parent.get_children():
         if is_appropriate(cursor, parser.currentUnit.spelling, [CursorKind.TYPEDEF_DECL]):
-            type_instance = Type().get_instance(cursor, parser.currentUnit)
+            type_instance = Kinds().get_instance(cursor, parser.currentUnit)
             assert type_instance.__class__.__name__ == "Typedef"
             type_instance.handle()
             container.append((type_instance.name, type_instance.underlying))
@@ -42,7 +39,7 @@ def visitor_typedef_parsing_iteration(parent, parser, container):
 def visitor_handle_enums(parent, parser, container):
     for cursor in parent.get_children():
         if is_appropriate(cursor, parser.currentUnit.spelling, [CursorKind.ENUM_DECL]):
-            type_instance = Type().get_instance(cursor, parser.currentUnit)
+            type_instance = Kinds().get_instance(cursor, parser.currentUnit)
             assert type_instance.__class__.__name__ == "Enum"
             type_instance.handle()
             container.append((type_instance.name, type_instance.constants))
@@ -52,7 +49,7 @@ def visitor_handle_enums(parent, parser, container):
 def visitor_handle_functions(parent, parser, container):
     for cursor in parent.get_children():
         if is_appropriate(cursor, parser.currentUnit.spelling, [CursorKind.FUNCTION_DECL]):
-            type_instance = Type().get_instance(cursor, parser.currentUnit)
+            type_instance = Kinds().get_instance(cursor, parser.currentUnit)
             assert type_instance.__class__.__name__ == "Function"
             type_instance.handle()
             container.append((type_instance.name, type_instance.type, *type_instance.args))
@@ -62,7 +59,7 @@ def visitor_handle_functions(parent, parser, container):
 def visitor_handle_structures(parent, parser, container):
     for cursor in parent.get_children():
         if is_appropriate(cursor, parser.currentUnit.spelling, [CursorKind.STRUCT_DECL]):
-            type_instance = Type().get_instance(cursor, parser.currentUnit)
+            type_instance = Kinds().get_instance(cursor, parser.currentUnit)
             assert type_instance.__class__.__name__ == "Struct"
             type_instance.handle()
             container.append((type_instance.name, *type_instance.fields.items()))
@@ -112,7 +109,7 @@ def add_types_manually():
 def visitor_function(parent, parser, writer, kinds):
     for cursor in parent.get_children():
         if is_appropriate(cursor, parser.currentUnit.spelling, kinds):
-            type_instance = Type().get_instance(cursor, parser.currentUnit)
+            type_instance = Kinds().get_instance(cursor, parser.currentUnit)
             type_instance.handle()
             writer.update_containers(type_instance)
         visitor_function(cursor, parser, writer, kinds)
@@ -139,7 +136,7 @@ def parse_all(create_parser, create_writer):
 
 def test_context_parse_args(create_parser):
     parser = create_parser
-    assert parser._projectPath == "."
+    assert parser._projectPath == "./"
     assert parser._parseFiles == ["./samples/include/header.h", "./samples/source.c"]
     assert parser.outputFile == "generated.py"
     expected_clang_args = ["-D__linux__", "-U_WIN32", "-I./samples/include"]

@@ -1,13 +1,13 @@
 {
-  "project": ".",
+  "project": "./",
 
   "files": [
-    "/samples/include/header.h",
-    "/samples/source.c"
+    "samples/include/header.h",
+    "samples/source.c"
   ],
 
   "-Ipaths": [
-    "/samples/include"
+    "samples/include"
   ],
 
   "preprocessor": [

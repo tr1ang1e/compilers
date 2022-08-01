@@ -1,9 +1,4 @@
-import sys
-sys.path.append('./modules')
-
-from modules.kinds import Kinds, Type
-from modules.parser import Parser
-from modules.writer import Writer
+from modules import Kinds, Writer, Parser
 from clang.cindex import CursorKind
 
 
@@ -20,9 +15,9 @@ def is_appropriate(cursor, unit_spelling, kinds):
 def visitor_function(parent, parser, writer, kinds):
     for cursor in parent.get_children():
         if is_appropriate(cursor, parser.currentUnit.spelling, kinds):
-            type_instance = Type().get_instance(cursor, parser.currentUnit)
+            type_instance = Kinds().get_instance(cursor, parser.currentUnit)
             type_instance.handle()
-            if type_instance.name is not None:  # some instance should be skipped
+            if type_instance.name is not None:  # some instances should be skipped
                 writer.update_containers(type_instance)
         visitor_function(cursor, parser, writer, kinds)
 
@@ -39,14 +34,8 @@ def main():
     print(":: Preparing. Processing typedefs ")
     traverse_ast(parser, writer, [CursorKind.TYPEDEF_DECL])
 
-    # debug
-    #
-
     print(":: Processing macros, user types and functions ")
     traverse_ast(parser, writer, [kind for kind in Kinds.cursorKinds.keys() if kind != CursorKind.TYPEDEF_DECL])
-
-    # debug
-    #
 
     print(":: Generating wrapper")
     writer.generate_output(parser.outputFile, parser.files, parser.project)

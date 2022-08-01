@@ -1,4 +1,4 @@
-import sys
+import os
 import argparse
 import json
 from clang.cindex import TranslationUnit
@@ -19,25 +19,24 @@ class Parser:
     currentUnit = None
 
     def __init__(self, cli_args=None):
-        self._settings_parser = self.__class__.initialize_argument_parser()
+        self._settings_parser = self.initialize_argument_parser()
         self.parse_cli_args(cli_args)
         self.initialize_defaults()
         self._parserIndex = Index.create()
 
     def parse_cli_args(self, cli_args=None):
-        if cli_args is None:
-            cli_args = sys.argv[1::]
         args = self._settings_parser.parse_args(cli_args)
         settings_file = open(args.jsonPath, mode="r")
         settings_dict = json.load(settings_file)
 
         self._projectPath = settings_dict["project"]
-        self._parseFiles = [self._projectPath + file for file in settings_dict["files"]]
+        self._parseFiles = [os.path.join(self._projectPath, file) for file in settings_dict["files"]]
         self.outputFile = settings_dict["output"]
 
         self._clangArgs = []
         self._clangArgs.extend(settings_dict["preprocessor"])
-        self._clangArgs.extend(list(map(lambda path: "-I" + self._projectPath + path, settings_dict["-Ipaths"])))
+        self._clangArgs.extend(list(map(lambda path: "-I" + os.path.join(self._projectPath, path),
+                                        settings_dict["-Ipaths"])))
         settings_file.close()
 
     def initialize_defaults(self):
