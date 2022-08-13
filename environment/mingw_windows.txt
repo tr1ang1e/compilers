@@ -1,0 +1,9 @@
+MinGW installation:
+
+	вариант 1 = с помощью MSYS2 (Minimal System) = https://www.msys2.org
+	
+	вариант 2 = 
+		скачать предсобранную версию MinGW = https://www.mingw-w64.org/downloads/  >>  MinGW-W64-builds
+		- обратить внимание на корректность target (i686 или x86_64) и tread_model (posix или win32)
+		- распаковать скачанное в любую директорию
+		- добавить PATH: <mingw>/bin  (важно именно 'bin')

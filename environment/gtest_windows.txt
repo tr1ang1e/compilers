@@ -1,0 +1,21 @@
+Gtest installation:
+
+	1. inside MS Visual Studio
+		- install MSVS = https://visualstudio.microsoft.com/vs/
+		- when installing (or later by running intaller) choose corercponding toolset
+		- use Gtest form MSVS (or manually compile with MS Visual Compiler)
+
+	2. with MinGW
+		- install MinGW  =  см. 'mingw' инструкцию
+		- install CMake  =  см. 'cmake' инструкцию
+		- reset PC to update PATH
+		- download Gtest source code = https://github.com/google/googletest
+		- unpack downloaded source code to any foler (e.g. 'gtest')
+		- commands:
+			$ cd gtest
+			$ mkdir build && cd build
+			$ cmake .. -G "MinGW Makefiles"
+			$ mingw32-make.exe
+		- put: 
+			gtest\build\libraries\*  >>  <mingw_base_dir>\<specific_mingw_dir>\lib\
+			gtest\googletest\include\gtest (drectory itself, not only content)  >>  <mingw_base_dir>\<specific_mingw_dir>\include\

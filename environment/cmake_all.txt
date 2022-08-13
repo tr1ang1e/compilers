@@ -1,0 +1,1 @@
+Install instructions for all OS = https://cmake.org/install/
