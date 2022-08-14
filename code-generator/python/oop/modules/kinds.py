@@ -357,12 +357,13 @@ class Struct(CommonTypeData):
         for field in self.cursor.get_children():
             field_name = field.displayname
             field_type = self.get_ctype(field.type.spelling)
+            field_width = field.get_bitfield_width() if field.is_bitfield() else 0
 
             # handle callbacks. Not necessary. The reason: callback is typedef kind ...
-            # ... if skip this check, all of identical callbacks would be replaced with the same typedef 
+            # ... if skip this check, all of identical callbacks would be replaced with the same typedef
             if self.is_callback(field):
                 field_type = field.type.spelling  # the exact input name without getting ctype
-            
+
             # handle pointer to structure itself: if field type is pointer to structure name or to alias ...
             if field_type.find("POINTER(" + self.name + ")") != -1:
                 field_type = field_type.replace("POINTER(" + self.name + ")", ThisPointer)
@@ -370,9 +371,9 @@ class Struct(CommonTypeData):
             # ... or if field type is 'handler' = alias to pointer to structure or alias
             elif self.is_handler(field.type.spelling):
                 field_type = field_type.replace(self.get_base_type(field.type.spelling)[0], ThisPointer)
-                field_type = field_type.replace('c_void_p', ThisPointer)   
+                field_type = field_type.replace('c_void_p', ThisPointer)
 
-            self.fields[field_name] = field_type
+            self.fields[field_name] = (field_type, field_width)
 
         if not len(self.fields):
             self.__class__._incomplete.append(self.name)
@@ -384,8 +385,10 @@ class Struct(CommonTypeData):
         wrapper.write("\n\nclass {}(Structure):  {}\n".format(self.name, incomplete))
         wrapper.write("    _fields_ = [")
 
-        for field_name, field_type in self.fields.items():
-            wrapper.write("\n        (\"{}\", {}),".format(field_name, field_type))
+        for field_name, field_type_info in self.fields.items():
+            field_type = field_type_info[0]
+            field_width = ", {}".format(field_type_info[1]) if field_type_info[1] else ""
+            wrapper.write("\n        (\"{}\", {}{}),".format(field_name, field_type, field_width))
 
         wrapper.write("\n    ]\n")
 

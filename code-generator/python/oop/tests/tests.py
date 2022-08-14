@@ -269,11 +269,11 @@ def test_handle_structures(parse_typedefs, add_types_manually):
         visitor_handle_structures(translation_unit.cursor, parser, container)
     print(container)
     assert ("Typedef_IncompleteStruct_test",) in container
-    assert ('S_callback_test', ('function', 'callback_test')) in container
-    assert ('struct_S_test', ('array', 'c_int32 * 123'),
-                             ('c', 'c_char'),
-                             ('self', 'POINTER(this)'),
-                             ('self_handler', 'POINTER(this)')) in container
+    assert ('S_callback_test', ('function', ('callback_test', 0))) in container
+    assert ('struct_S_test', ('array', ('c_int32 * 123', 0)),
+                             ('c', ('c_char', 0)),
+                             ('self', ('POINTER(this)', 0)),
+                             ('self_handler', ('POINTER(this)', 0))) in container
 
 
 def test_update_writer(parse_all):
