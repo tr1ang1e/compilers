@@ -52,6 +52,7 @@ class Kinds:
         CursorKind.MACRO_DEFINITION:     "Macro",
         CursorKind.ENUM_DECL:            "Enum",
         CursorKind.STRUCT_DECL:          "Struct",
+        CursorKind.UNION_DECL:           "Union",
         CursorKind.FUNCTION_DECL:        "Function",
     }
 
@@ -61,7 +62,9 @@ class Kinds:
             self.types[kind] = globals()[type_name]
 
     def get_instance(self, cursor, unit):
-        return self.types[cursor.kind](cursor, unit)
+        if cursor.kind in self.types.keys():
+            return self.types[cursor.kind](cursor, unit)
+        return None
 
 
 class CommonTypeData:
@@ -282,6 +285,7 @@ class Macro(CommonTypeData):
         self.value = None
 
     def handle(self):
+
         tokens = []
         for token in TokenGroup.get_tokens(self.unit, self.cursor.extent):
             tokens.append(token.spelling)
@@ -355,25 +359,35 @@ class Struct(CommonTypeData):
         self.name = self.name.replace("struct ", "struct_")  # if type doesn't have aliases
 
         for field in self.cursor.get_children():
-            field_name = field.displayname
-            field_type = self.get_ctype(field.type.spelling)
-            field_width = field.get_bitfield_width() if field.is_bitfield() else 0
 
-            # handle callbacks. Not necessary. The reason: callback is typedef kind ...
-            # ... if skip this check, all of identical callbacks would be replaced with the same typedef
-            if self.is_callback(field):
-                field_type = field.type.spelling  # the exact input name without getting ctype
+            # handle nested declarations
+            field_declaration = Kinds().get_instance(field, self.unit)
+            if field_declaration is not None:
+                print(" :: something nested")
+                # field_declaration.handle()
 
-            # handle pointer to structure itself: if field type is pointer to structure name or to alias ...
-            if field_type.find("POINTER(" + self.name + ")") != -1:
-                field_type = field_type.replace("POINTER(" + self.name + ")", ThisPointer)
+            else:
+                print(" :: something simple")
 
-            # ... or if field type is 'handler' = alias to pointer to structure or alias
-            elif self.is_handler(field.type.spelling):
-                field_type = field_type.replace(self.get_base_type(field.type.spelling)[0], ThisPointer)
-                field_type = field_type.replace('c_void_p', ThisPointer)
+                field_name = field.displayname
+                field_type = self.get_ctype(field.type.spelling)
+                field_width = field.get_bitfield_width() if field.is_bitfield() else 0
 
-            self.fields[field_name] = (field_type, field_width)
+                # handle callbacks. Not necessary. The reason: callback is typedef kind ...
+                # ... if skip this check, all of identical callbacks would be replaced with the same typedef
+                if self.is_callback(field):
+                    field_type = field.type.spelling  # the exact input name without getting ctype
+
+                # handle pointer to structure itself: if field type is pointer to structure name or to alias ...
+                if field_type.find("POINTER(" + self.name + ")") != -1:
+                    field_type = field_type.replace("POINTER(" + self.name + ")", ThisPointer)
+
+                # ... or if field type is 'handler' = alias to pointer to structure or alias
+                elif self.is_handler(field.type.spelling):
+                    field_type = field_type.replace(self.get_base_type(field.type.spelling)[0], ThisPointer)
+                    field_type = field_type.replace('c_void_p', ThisPointer)
+
+                self.fields[field_name] = (field_type, field_width)
 
         if not len(self.fields):
             self.__class__._incomplete.append(self.name)
@@ -408,6 +422,22 @@ class Struct(CommonTypeData):
         field_canonical_type = Typedef.get_canonical_underlying(field_base_type).replace('*', '').strip()
         struct_canonical_type = Typedef.get_canonical_underlying(self.name).replace("struct_", "struct ").strip()
         return field_canonical_type == struct_canonical_type
+
+
+class Union(CommonTypeData):
+
+    def __init__(self, cursor, unit):
+        super().__init__(cursor, unit)
+        self.name = None
+        self.fields = dict()
+
+    def handle(self):
+        print(" :: union handler")
+        # self.name = self.cursor.type.spelling
+        # print(self.name)
+
+    def generate(self, wrapper):
+        print(" :: union generator")
 
 
 class Function(CommonTypeData):

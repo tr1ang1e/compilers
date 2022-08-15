@@ -284,7 +284,7 @@ def test_update_writer(parse_all):
         for instance in instances:
             container.append((kind, instance.name))
 
-    # all containers work fine
+    # all handlers work fine
     assert (CursorKind.TYPEDEF_DECL, 'u8_test') in container
     assert (CursorKind.MACRO_DEFINITION, 'HEADER_DEFINE_test') in container
     assert (CursorKind.ENUM_DECL, 'EnumAlias_test') in container
