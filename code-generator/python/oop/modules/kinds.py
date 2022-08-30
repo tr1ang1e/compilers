@@ -45,14 +45,14 @@ ThisPointer = 'this'  # to use when structure has pointer to itself as it's fiel
 class Kinds:
 
     # to add new kind management:
-    #    1. update: CursorKind.<NEW_KIND> : "NewKind": 
-    #    2. create: class NewKind(CommonTypeData) 
+    #    1. update: CursorKind.<NEW_KIND> : "NewKind"    (the same "NewKind" might be used for several cases)
+    #    2. create: class NewKind(CommonTypeData)
     cursorKinds = {
         CursorKind.TYPEDEF_DECL:         "Typedef",
         CursorKind.MACRO_DEFINITION:     "Macro",
         CursorKind.ENUM_DECL:            "Enum",
-        CursorKind.STRUCT_DECL:          "Struct",
-        CursorKind.UNION_DECL:           "Union",
+        CursorKind.STRUCT_DECL:          "StructUnion",
+        CursorKind.UNION_DECL:           "StructUnion",
         CursorKind.FUNCTION_DECL:        "Function",
     }
 
@@ -111,11 +111,11 @@ class CommonTypeData:
             ctype = 'c_int'
 
         # structure type without typedef at all (the same replace would be done for structure declaration)
-        elif base_type.find('struct ') != -1 and Struct.is_known(base_type):
-            ctype = base_type.replace('struct ', 'struct_')
+        elif (base_type.find('struct ') != -1 or base_type.find('union ') != -1) and StructUnion.is_known(base_type):
+            ctype = base_type.replace('struct ', 'struct_').replace('union ', 'union_')
 
         # alias for known user's type (order is important: don't place before 2 previous 'elif')
-        elif Struct.is_known(base_canonical_underlying) or Enum.is_known(base_canonical_underlying):
+        elif StructUnion.is_known(base_canonical_underlying) or Enum.is_known(base_canonical_underlying):
             ctype = base_type
 
         # alias for callback
@@ -200,10 +200,10 @@ class Typedef(CommonTypeData):
         underlying = None
 
         # struct: generate only handlers to avoid conflict with real declaration
-        if self.underlying.find("struct ") != -1 and self.underlying.find('*') != -1:
+        if (self.underlying.find("struct ") != -1 or self.underlying.find("union ") != -1) and self.underlying.find('*') != -1:
             alias = self.name
             base_type = self.get_ctype(self.get_base_type(self.underlying)[0])
-            if Struct.is_incomplete(base_type):
+            if StructUnion.is_incomplete(base_type):
                 underlying = 'c_void_p'
             else:
                 # TODO: generate in this file, but after structs
@@ -341,8 +341,8 @@ class Enum(CommonTypeData):
         return input_type in cls._enums
 
 
-class Struct(CommonTypeData):
-    _structs = list()
+class StructUnion(CommonTypeData):
+    _structs_unions = list()
     _incomplete = list()
 
     def __init__(self, cursor, unit):
@@ -353,10 +353,11 @@ class Struct(CommonTypeData):
     def handle(self):
         # keep all handled structures original names
         # necessary for correct get_ctype() working
-        self.__class__._structs.append(self.cursor.type.spelling)
+        self.__class__._structs_unions.append(self.cursor.type.spelling)
 
         self.name = Typedef.get_type(self.cursor.type.spelling)
         self.name = self.name.replace("struct ", "struct_")  # if type doesn't have aliases
+        self.name = self.name.replace("union ", "union_")  # if type doesn't have aliases
 
         for field in self.cursor.get_children():
 
@@ -396,7 +397,7 @@ class Struct(CommonTypeData):
 
     def generate(self, wrapper):
         incomplete = "# incomplete type, pointers to type replaced with 'c_void_p'" if not len(self.fields) else ""
-        wrapper.write("\n\nclass {}(Structure):  {}\n".format(self.name, incomplete))
+        wrapper.write("\n\nclass {}({}):  {}\n".format(self.name, "Structure" if self.cursor.kind == CursorKind.STRUCT_DECL else "Union", incomplete))
         wrapper.write("    _fields_ = [")
 
         for field_name, field_type_info in self.fields.items():
@@ -408,7 +409,7 @@ class Struct(CommonTypeData):
 
     @classmethod
     def is_known(cls, input_type):
-        return input_type in cls._structs
+        return input_type in cls._structs_unions
 
     @classmethod
     def is_incomplete(cls, input_type):
@@ -420,8 +421,9 @@ class Struct(CommonTypeData):
     def is_handler(self, type_spelling):
         field_base_type = self.get_base_type(type_spelling)[0]
         field_canonical_type = Typedef.get_canonical_underlying(field_base_type).replace('*', '').strip()
-        struct_canonical_type = Typedef.get_canonical_underlying(self.name).replace("struct_", "struct ").strip()
-        return field_canonical_type == struct_canonical_type
+        struct_union_canonical_type = Typedef.get_canonical_underlying(self.name).\
+            replace("struct_", "struct ").replace("union_", "union ").strip()
+        return field_canonical_type == struct_union_canonical_type
 
 
 class Union(CommonTypeData):

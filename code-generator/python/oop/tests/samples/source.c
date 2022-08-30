@@ -13,7 +13,6 @@ typedef struct NestedOuterS
 
 } NestedOuter;
 
-*/
 
 struct S
 {
@@ -26,7 +25,8 @@ struct S
     }  Union
 }
 
+*/
 union un
 {
     int i;
-} u;
+};
