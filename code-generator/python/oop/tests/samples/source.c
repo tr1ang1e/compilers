@@ -26,7 +26,18 @@ struct S
 }
 
 */
-union un
+struct A
 {
-    int i;
-};
+    struct B
+    {
+        struct C1
+        {
+            int i;
+        } c1;
+
+        struct C2
+        {
+            int j;
+        } c2;
+    } b;
+} a;

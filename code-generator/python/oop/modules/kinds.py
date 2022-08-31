@@ -61,16 +61,18 @@ class Kinds:
         for kind, type_name in self.cursorKinds.items():
             self.types[kind] = globals()[type_name]
 
-    def get_instance(self, cursor, unit):
+    def get_instance(self, cursor, parser, writer):
         if cursor.kind in self.types.keys():
-            return self.types[cursor.kind](cursor, unit)
+            return self.types[cursor.kind](cursor, parser, writer)
         return None
 
 
 class CommonTypeData:
-    def __init__(self, cursor, unit):
-        self.cursor = cursor
-        self.unit = unit
+    def __init__(self, cursor, parser, writer):
+        # keep full context for particular type
+        self.cursor = cursor        # first time type was met
+        self.parser = parser        # particular unit, necessary to handle location and tokens
+        self.writer = writer        # output file which this type should be generated in
         self.name = None
 
     @property
@@ -185,8 +187,8 @@ class Typedef(CommonTypeData):
     _aliases = dict()
     _underlyings = dict()
 
-    def __init__(self, cursor, unit):
-        super().__init__(cursor, unit)
+    def __init__(self, cursor, parser, writer):
+        super().__init__(cursor, parser, writer)
         self.name = None
         self.underlying = None
 
@@ -280,14 +282,14 @@ class Typedef(CommonTypeData):
 
 class Macro(CommonTypeData):
 
-    def __init__(self, cursor, unit):
-        super().__init__(cursor, unit)
+    def __init__(self, cursor, parser, writer):
+        super().__init__(cursor, parser, writer)
         self.value = None
 
     def handle(self):
 
         tokens = []
-        for token in TokenGroup.get_tokens(self.unit, self.cursor.extent):
+        for token in TokenGroup.get_tokens(self.parser.currentUnit, self.cursor.extent):
             tokens.append(token.spelling)
 
         # MACRO 1 or MACRO "string"
@@ -314,8 +316,8 @@ class Macro(CommonTypeData):
 class Enum(CommonTypeData):
     _enums = list()
 
-    def __init__(self, cursor, unit):
-        super().__init__(cursor, unit)
+    def __init__(self, cursor, parser, writer):
+        super().__init__(cursor, parser, writer)
         self.constants = dict()
 
     def handle(self):
@@ -345,8 +347,8 @@ class StructUnion(CommonTypeData):
     _structs_unions = list()
     _incomplete = list()
 
-    def __init__(self, cursor, unit):
-        super().__init__(cursor, unit)
+    def __init__(self, cursor, parser, writer):
+        super().__init__(cursor, parser, writer)
         self.name = None
         self.fields = dict()
 
@@ -362,13 +364,21 @@ class StructUnion(CommonTypeData):
         for field in self.cursor.get_children():
 
             # handle nested declarations
-            field_declaration = Kinds().get_instance(field, self.unit)
+            field_declaration = Kinds().get_instance(field, self.parser, self.writer)
             if field_declaration is not None:
-                print(" :: something nested")
-                # field_declaration.handle()
+
+                # debug
+                # print(" :: nested = {}".format(field.displayname))
+
+                if self.parser.register_cursor(field):
+                    field_declaration.handle()
+                    if field_declaration.name is not None:  # some instances should be skipped
+                        self.writer.update_containers(field_declaration)
 
             else:
-                print(" :: something simple")
+
+                # debug
+                # print(" :: simple = {}".format(field.displayname))
 
                 field_name = field.displayname
                 field_type = self.get_ctype(field.type.spelling)
@@ -426,26 +436,10 @@ class StructUnion(CommonTypeData):
         return field_canonical_type == struct_union_canonical_type
 
 
-class Union(CommonTypeData):
-
-    def __init__(self, cursor, unit):
-        super().__init__(cursor, unit)
-        self.name = None
-        self.fields = dict()
-
-    def handle(self):
-        print(" :: union handler")
-        # self.name = self.cursor.type.spelling
-        # print(self.name)
-
-    def generate(self, wrapper):
-        print(" :: union generator")
-
-
 class Function(CommonTypeData):
 
-    def __init__(self, cursor, unit):
-        super().__init__(cursor, unit)
+    def __init__(self, cursor, parser, writer):
+        super().__init__(cursor, parser, writer)
         self.type = None
         self.args = list()
 

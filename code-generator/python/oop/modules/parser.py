@@ -1,8 +1,7 @@
 import os
 import argparse
 import json
-from clang.cindex import TranslationUnit
-from clang.cindex import Index
+from clang.cindex import TranslationUnit, Index, CursorKind
 
 
 class Parser:
@@ -15,14 +14,16 @@ class Parser:
     outputFile = None
 
     # context itself
-    _parserIndex = None     # common context for files would be parsed by clang
+    _parserIndex = None             # common context for files would be parsed by clang
     currentUnit = None
+    _cursorRegistrator = None       # prevent double handling of the same cursor (different cases are possible)
 
     def __init__(self, cli_args=None):
         self._settings_parser = self.initialize_argument_parser()
         self.parse_cli_args(cli_args)
         self.initialize_defaults()
         self._parserIndex = Index.create()
+        self._cursorRegistrator = list()
 
     def parse_cli_args(self, cli_args=None):
         args = self._settings_parser.parse_args(cli_args)
@@ -66,3 +67,12 @@ class Parser:
                             default='./settings.json',
                             help="path to .json settings file")
         return parser
+
+    def register_cursor(self, cursor):
+        # transparent for first typedefs iteration
+        if cursor.type == CursorKind.TYPEDEF_DECL:
+            return True
+        # avoid double handling
+        elif cursor not in self._cursorRegistrator:
+            self._cursorRegistrator.append(cursor)
+            return True

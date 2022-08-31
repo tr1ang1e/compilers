@@ -88,14 +88,14 @@ class Class(object):
             
             version = ...
             print('+---------------------------------------------------------------+')
-            print('Py Wrapper: ...
+            print('Py Wrapper: ...                                                  ')
             print('+---------------------------------------------------------------+')
 
-            status = ... init() ...
+            status = True  # replace with appropriate init() 
             if not status:
                 raise Exception("Failed to init '...' library") 
 
-            instance._initialized = True
+            self._instance._initialized = True
 
     @staticmethod 
     def get_version():
