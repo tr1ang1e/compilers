@@ -26,18 +26,27 @@ struct S
 }
 
 */
-struct A
+
+#define macro 1
+
+typedef struct A
 {
     struct B
     {
-        struct C1
+        struct
         {
             int i;
         } c1;
 
-        struct C2
+        union C2
         {
             int j;
+            struct D
+            {
+                int y : 16;
+                int x : 15;
+                int z :  1;
+            } d;
         } c2;
     } b;
-} a;
+} A_alias;

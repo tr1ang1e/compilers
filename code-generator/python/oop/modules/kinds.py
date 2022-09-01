@@ -47,19 +47,35 @@ class Kinds:
     # to add new kind management:
     #    1. update: CursorKind.<NEW_KIND> : "NewKind"    (the same "NewKind" might be used for several cases)
     #    2. create: class NewKind(CommonTypeData)
+    # cursorKinds = {
+    #     CursorKind.TYPEDEF_DECL:         "Typedef",
+    #     CursorKind.MACRO_DEFINITION:     "Macro",
+    #     CursorKind.ENUM_DECL:            "Enum",
+    #     CursorKind.UNION_DECL:           "StructUnion",
+    #     CursorKind.STRUCT_DECL:          "StructUnion",
+    #     CursorKind.FUNCTION_DECL:        "Function",
+    # }
+    #
+    # new
     cursorKinds = {
-        CursorKind.TYPEDEF_DECL:         "Typedef",
-        CursorKind.MACRO_DEFINITION:     "Macro",
-        CursorKind.ENUM_DECL:            "Enum",
-        CursorKind.STRUCT_DECL:          "StructUnion",
-        CursorKind.UNION_DECL:           "StructUnion",
-        CursorKind.FUNCTION_DECL:        "Function",
+        (CursorKind.TYPEDEF_DECL, ):                                "Typedef",
+        (CursorKind.MACRO_DEFINITION, ):                            "Macro",
+        (CursorKind.ENUM_DECL, ):                                   "Enum",
+        (CursorKind.UNION_DECL, CursorKind.STRUCT_DECL,):           "StructUnion",
+        (CursorKind.FUNCTION_DECL, ):                               "Function",
     }
 
+    # def __init__(self):
+    #     self.types = dict()
+    #     for kind, type_name in self.cursorKinds.items():
+    #         self.types[kind] = globals()[type_name]
+    #
+    # new
     def __init__(self):
         self.types = dict()
         for kind, type_name in self.cursorKinds.items():
-            self.types[kind] = globals()[type_name]
+            for k in kind:
+                self.types[k] = globals()[type_name]
 
     def get_instance(self, cursor, parser, writer):
         if cursor.kind in self.types.keys():
@@ -349,13 +365,15 @@ class StructUnion(CommonTypeData):
 
     def __init__(self, cursor, parser, writer):
         super().__init__(cursor, parser, writer)
-        self.name = None
         self.fields = dict()
 
     def handle(self):
         # keep all handled structures original names
         # necessary for correct get_ctype() working
         self.__class__._structs_unions.append(self.cursor.type.spelling)
+
+        # debug
+        # print(self.cursor.type.spelling)
 
         self.name = Typedef.get_type(self.cursor.type.spelling)
         self.name = self.name.replace("struct ", "struct_")  # if type doesn't have aliases
@@ -365,21 +383,16 @@ class StructUnion(CommonTypeData):
 
             # handle nested declarations
             field_declaration = Kinds().get_instance(field, self.parser, self.writer)
+
+            # nested
             if field_declaration is not None:
-
-                # debug
-                # print(" :: nested = {}".format(field.displayname))
-
                 if self.parser.register_cursor(field):
                     field_declaration.handle()
                     if field_declaration.name is not None:  # some instances should be skipped
                         self.writer.update_containers(field_declaration)
 
+            # simple
             else:
-
-                # debug
-                # print(" :: simple = {}".format(field.displayname))
-
                 field_name = field.displayname
                 field_type = self.get_ctype(field.type.spelling)
                 field_width = field.get_bitfield_width() if field.is_bitfield() else 0

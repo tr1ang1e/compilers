@@ -6,25 +6,36 @@ from datetime import datetime
 class Writer(Kinds):
 
     def __init__(self):
+        super().__init__()
         self.containers = dict()
         for kind in self.cursorKinds.keys():
             self.containers[kind] = list()
 
     def update_containers(self, type_instance: CommonTypeData):
-        parsed_instances_names = [instance.name for instance in self.containers[type_instance.cursor.kind]]
 
-        # when type declaration and typedef are combined, clang tool handles type declaration twice
-        if type_instance.name not in parsed_instances_names:
-            self.containers[type_instance.cursor.kind].append(type_instance)
+        # new
+        key = None
+        for key in self.containers:
+            if type_instance.cursor.kind in key:
+                break
 
-        # must be replaced (not skipped) to cover all possible cases
-        else:
-            self.containers[type_instance.cursor.kind][parsed_instances_names.index(type_instance.name)] = type_instance
+        self.containers[key].append(type_instance)
+
+        # TODO: remove after testing
+        # parsed_instances_names = [instance.name for instance in self.containers[type_instance.cursor.kind]]
+        #
+        # # when type declaration and typedef are combined, clang tool handles type declaration twice
+        # if type_instance.name not in parsed_instances_names:
+        #     self.containers[type_instance.cursor.kind].append(type_instance)
+        #
+        # # must be replaced (not skipped) to cover all possible cases
+        # else:
+        #     self.containers[type_instance.cursor.kind][parsed_instances_names.index(type_instance.name)] = type_instance
 
     def generate_output(self, output_file: str, parsed_files: list, prefix: str):
         with open(output_file, mode="w") as wrapper:
             self.write_beginning(wrapper)
-            self.write_kinds(wrapper, parsed_files, prefix, [k for k in Kinds.cursorKinds if k != CursorKind.FUNCTION_DECL])
+            self.write_kinds(wrapper, parsed_files, prefix, [kind for keys in Kinds.cursorKinds for kind in keys if kind != CursorKind.FUNCTION_DECL])
             self.write_functions_class(wrapper, parsed_files, prefix)
 
     def write_kinds(self, wrapper, parsed_files, prefix, kinds):
@@ -33,13 +44,15 @@ class Writer(Kinds):
             wrapper.write("# +    {:<65} +\n".format(current[len(prefix)::]))
             wrapper.write("# +----------------------------------------------------------------------+\n\n")
 
-            for kind, instances in self.containers.items():
-                if kind in kinds:
-                    from_current = [instance for instance in instances if instance.location == current]
-                    for instance in from_current:
-                        instance.generate(wrapper)
-                    if len(from_current):
-                        wrapper.write('\n')
+            for key, instances in self.containers.items():
+                for kind in key:
+                    if kind in kinds:
+                        from_current = [instance for instance in instances if instance.location == current]
+                        for instance in from_current:
+                            instance.generate(wrapper)
+                        if len(from_current):
+                            wrapper.write('\n')
+                        break  # prevent generating the same container for every of several kinds in key
 
     def write_functions_class(self, wrapper, parsed_files, prefix):
         self.write_function_class_beginning(wrapper)
