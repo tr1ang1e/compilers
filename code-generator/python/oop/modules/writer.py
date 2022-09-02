@@ -13,7 +13,6 @@ class Writer(Kinds):
 
     def update_containers(self, type_instance: CommonTypeData):
 
-        # new
         key = None
         for key in self.containers:
             if type_instance.cursor.kind in key:

@@ -45,32 +45,18 @@ ThisPointer = 'this'  # to use when structure has pointer to itself as it's fiel
 class Kinds:
 
     # to add new kind management:
-    #    1. update: CursorKind.<NEW_KIND> : "NewKind"    (the same "NewKind" might be used for several cases)
-    #    2. create: class NewKind(CommonTypeData)
-    # cursorKinds = {
-    #     CursorKind.TYPEDEF_DECL:         "Typedef",
-    #     CursorKind.MACRO_DEFINITION:     "Macro",
-    #     CursorKind.ENUM_DECL:            "Enum",
-    #     CursorKind.UNION_DECL:           "StructUnion",
-    #     CursorKind.STRUCT_DECL:          "StructUnion",
-    #     CursorKind.FUNCTION_DECL:        "Function",
-    # }
-    #
-    # new
+    #    1. if appropriate class already exists, update corresponding tuple: ( ..., CursorKind.<NEW_KIND>, ): ...
+    #    2. if new class is required:
+    #        - create: (CursorKind.<NEW_KIND>, ) : "NewKindClass"
+    #        - create: class NewKindClass(CommonTypeData)
     cursorKinds = {
         (CursorKind.TYPEDEF_DECL, ):                                "Typedef",
         (CursorKind.MACRO_DEFINITION, ):                            "Macro",
         (CursorKind.ENUM_DECL, ):                                   "Enum",
-        (CursorKind.UNION_DECL, CursorKind.STRUCT_DECL,):           "StructUnion",
+        (CursorKind.UNION_DECL, CursorKind.STRUCT_DECL, ):          "StructUnion",
         (CursorKind.FUNCTION_DECL, ):                               "Function",
     }
 
-    # def __init__(self):
-    #     self.types = dict()
-    #     for kind, type_name in self.cursorKinds.items():
-    #         self.types[kind] = globals()[type_name]
-    #
-    # new
     def __init__(self):
         self.types = dict()
         for kind, type_name in self.cursorKinds.items():
@@ -368,33 +354,45 @@ class StructUnion(CommonTypeData):
         self.fields = dict()
 
     def handle(self):
-        # keep all handled structures original names
-        # necessary for correct get_ctype() working
-        self.__class__._structs_unions.append(self.cursor.type.spelling)
 
-        # debug
-        # print(self.cursor.type.spelling)
+        # handle nested anonymous structures and unions     # TODO: might be expanded to handle not only nested
+        anon_members_counter = 0    # auto naming counter
+        anon_type_name = None       # nested declaration is met twice: have to keep name without counter increasing
+        if hasattr(self.cursor, "anon_type_name"):
+            self.name = self.cursor.anon_type_name
+            self.__class__._structs_unions.append(self.name)
 
-        self.name = Typedef.get_type(self.cursor.type.spelling)
-        self.name = self.name.replace("struct ", "struct_")  # if type doesn't have aliases
-        self.name = self.name.replace("union ", "union_")  # if type doesn't have aliases
+        # handle named structures and unions
+        else:
+            # keep all handled structures original names
+            # necessary for correct get_ctype() working
+            self.__class__._structs_unions.append(self.cursor.type.spelling)
+            # get common name
+            self.name = Typedef.get_type(self.cursor.type.spelling)
+            self.name = self.name.replace("struct ", "struct_")  # if type doesn't have aliases
+            self.name = self.name.replace("union ", "union_")  # if type doesn't have aliases
 
         for field in self.cursor.get_children():
 
             # handle nested declarations
+            # anon_type_name = None
+            temp_type_name = self.name + "_anon_{}".format(anon_members_counter)
+            self.assign_type_name(field, temp_type_name)
             field_declaration = Kinds().get_instance(field, self.parser, self.writer)
 
-            # nested
+            # nested declaration
             if field_declaration is not None:
+                anon_type_name = temp_type_name
+                anon_members_counter += 1
                 if self.parser.register_cursor(field):
                     field_declaration.handle()
                     if field_declaration.name is not None:  # some instances should be skipped
                         self.writer.update_containers(field_declaration)
 
-            # simple
+            # members (of both nested and usual declared types)
             else:
                 field_name = field.displayname
-                field_type = self.get_ctype(field.type.spelling)
+                field_type = self.get_ctype(field.type.spelling if not field.is_anonymous() else anon_type_name)
                 field_width = field.get_bitfield_width() if field.is_bitfield() else 0
 
                 # handle callbacks. Not necessary. The reason: callback is typedef kind ...
@@ -437,6 +435,11 @@ class StructUnion(CommonTypeData):
     @classmethod
     def is_incomplete(cls, input_type):
         return input_type in cls._incomplete
+
+    @classmethod
+    def assign_type_name(cls, cursor, name):
+        if cursor.type.get_declaration().is_anonymous():
+            cursor.anon_type_name = name
 
     def is_callback(self, cursor):
         return cursor.type.get_canonical().spelling.find('(*)') != -1

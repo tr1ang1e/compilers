@@ -42,12 +42,8 @@ def main():
     traverse_ast(parser, writer, [CursorKind.TYPEDEF_DECL])
 
     print(":: Processing macros, user types and functions ")
-    # traverse_ast(parser, writer, [kind for kind in Kinds.cursorKinds.keys() if kind != CursorKind.TYPEDEF_DECL])
-    #
-    # new
     kinds = [kind for key in Kinds.cursorKinds.keys() if key != (CursorKind.TYPEDEF_DECL, ) for kind in key]
     traverse_ast(parser, writer, kinds)
-
 
     print(":: Generating wrapper")
     writer.generate_output(parser.outputFile, parser.files, parser.project)

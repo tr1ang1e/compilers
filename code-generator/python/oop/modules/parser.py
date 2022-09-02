@@ -76,3 +76,5 @@ class Parser:
         elif cursor not in self._cursorRegistrator:
             self._cursorRegistrator.append(cursor)
             return True
+        else:
+            return False

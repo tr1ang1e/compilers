@@ -27,10 +27,18 @@ struct S
 
 */
 
-#define macro 1
-
 typedef struct A
 {
+    struct
+    {
+        int z;
+    } z;
+
+    union
+    {
+        int z;
+    } aa;
+
     struct B
     {
         struct
@@ -38,7 +46,7 @@ typedef struct A
             int i;
         } c1;
 
-        union C2
+        union
         {
             int j;
             struct D
@@ -48,5 +56,20 @@ typedef struct A
                 int z :  1;
             } d;
         } c2;
+
+        struct
+        {
+            int var;
+        } e;
+
+        union
+        {
+            int var;
+            struct K
+            {
+                int var;
+            } k;
+        } f;
     } b;
 } A_alias;
+
