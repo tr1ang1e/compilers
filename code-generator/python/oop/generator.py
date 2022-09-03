@@ -8,14 +8,20 @@ from clang.cindex import Cursor, CursorKind
 
 
 def is_appropriate(cursor, parser, kinds):
+
     # location
     is_from_given_file = False
     if cursor.location.file:  # can't get file from some cursors which points to system entities
         is_from_given_file = cursor.location.file.name == parser.currentUnit.spelling
+
     # kind
     is_appropriate_kind = cursor.kind in kinds
+
     # registered
-    is_registered = parser.register_cursor(cursor)
+    is_registered = False
+    if is_from_given_file and is_appropriate_kind:  # register only appropriate types = increase performance
+        is_registered = parser.register_cursor(cursor)
+
     return is_from_given_file and is_appropriate_kind and is_registered
 
 

@@ -355,17 +355,17 @@ class StructUnion(CommonTypeData):
 
     def handle(self):
 
-        # handle nested anonymous structures and unions     # TODO: might be expanded to handle not only nested
-        anon_members_counter = 0    # auto naming counter
+        # variables to deal with nested anonymous structures and unions
+        anon_fields_counter = 0     # auto naming counter
         anon_type_name = None       # nested declaration is met twice: have to keep name without counter increasing
+        is_anon_scope = False       # cover the case with 'struct' as an anonymous scope
+
+        # know if current structure is anonymous
         if hasattr(self.cursor, "anon_type_name"):
             self.name = self.cursor.anon_type_name
             self.__class__._structs_unions.append(self.name)
-
-        # handle named structures and unions
         else:
-            # keep all handled structures original names
-            # necessary for correct get_ctype() working
+            # keep all handled structures original names. [!] necessary for correct get_ctype() processing
             self.__class__._structs_unions.append(self.cursor.type.spelling)
             # get common name
             self.name = Typedef.get_type(self.cursor.type.spelling)
@@ -374,16 +374,21 @@ class StructUnion(CommonTypeData):
 
         for field in self.cursor.get_children():
 
-            # handle nested declarations
-            # anon_type_name = None
-            temp_type_name = self.name + "_anon_{}".format(anon_members_counter)
-            self.assign_type_name(field, temp_type_name)
-            field_declaration = Kinds().get_instance(field, self.parser, self.writer)
+            # check for nested declarations
+            temp_type_name = self.name + "_anon_{}".format(anon_fields_counter)
+            field_declaration = self.is_nested_declaration(field, temp_type_name)
 
             # nested declaration
             if field_declaration is not None:
                 anon_type_name = temp_type_name
-                anon_members_counter += 1
+
+                # consider anonymous declaration as an anonymous scope anyway
+                if field.is_anonymous():
+                    if not is_anon_scope:
+                        self.fields["_scope"] = (anon_type_name, 0)
+                        is_anon_scope = True
+
+                anon_fields_counter += 1
                 if self.parser.register_cursor(field):
                     field_declaration.handle()
                     if field_declaration.name is not None:  # some instances should be skipped
@@ -391,8 +396,15 @@ class StructUnion(CommonTypeData):
 
             # members (of both nested and usual declared types)
             else:
+                if field.is_anonymous():
+                    if is_anon_scope:
+                        # if we are here, it means anonymous declaration is a named member (not an anonymous scope)
+                        self.fields.pop("_scope", None)
+                    field_type = anon_type_name
+                else:
+                    field_type = self.get_ctype(field.type.spelling)
+
                 field_name = field.displayname
-                field_type = self.get_ctype(field.type.spelling if not field.is_anonymous() else anon_type_name)
                 field_width = field.get_bitfield_width() if field.is_bitfield() else 0
 
                 # handle callbacks. Not necessary. The reason: callback is typedef kind ...
@@ -436,10 +448,11 @@ class StructUnion(CommonTypeData):
     def is_incomplete(cls, input_type):
         return input_type in cls._incomplete
 
-    @classmethod
-    def assign_type_name(cls, cursor, name):
+    def is_nested_declaration(self, cursor, name):
         if cursor.type.get_declaration().is_anonymous():
             cursor.anon_type_name = name
+        field_declaration = Kinds().get_instance(cursor, self.parser, self.writer)
+        return field_declaration
 
     def is_callback(self, cursor):
         return cursor.type.get_canonical().spelling.find('(*)') != -1
